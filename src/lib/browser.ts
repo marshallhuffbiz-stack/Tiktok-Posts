@@ -1,6 +1,15 @@
 // src/lib/browser.ts
-import { chromium, type BrowserContext, type Page } from 'playwright';
 import path from 'node:path';
+import type { BrowserContext, Page } from 'playwright';
+import { chromium as chromiumExtra } from 'playwright-extra';
+// @ts-ignore — puppeteer-extra-plugin-stealth has no TS types
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+
+// Apply stealth once at module load. Hides navigator.webdriver, fills in
+// navigator.plugins, masks WebGL renderer string, fixes Notification.permission,
+// and several dozen other automation tells. This is the canonical fix for
+// "same content, manual upload OK, scripted upload flagged" detection patterns.
+chromiumExtra.use(StealthPlugin());
 
 export interface OpenBrowserOptions {
   /** Absolute path to the persistent data dir. Default: ./browser-data/ */
@@ -24,7 +33,7 @@ export async function openBrowser(opts: OpenBrowserOptions = {}): Promise<OpenBr
   // user when the schedule fires. opts.headed=true is for the login flow which
   // wants the window visible.
   const offScreen = !opts.headed;
-  const context = await chromium.launchPersistentContext(dataDir, {
+  const context = await chromiumExtra.launchPersistentContext(dataDir, {
     headless: false, // always headed
     viewport: { width: 1280, height: 800 },
     userAgent:
