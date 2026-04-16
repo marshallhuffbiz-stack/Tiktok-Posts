@@ -121,9 +121,22 @@ export async function setFirstLocationChip(page: Page): Promise<string | null> {
  * Clicks Discard, then confirms in the dialog. Used for --dry-run smoke tests.
  */
 export async function discardUpload(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /^Discard$/ }).first().click();
-  // Dialog appears; click the destructive Discard inside it.
-  await page.locator('div[role="dialog"]').getByRole('button', { name: /^Discard$/ }).click();
+  // First Discard — the action button at the bottom of the form
+  const firstDiscard = page.getByRole('button', { name: /^Discard$/ }).first();
+  await firstDiscard.scrollIntoViewIfNeeded();
+  try {
+    await firstDiscard.click({ timeout: 15_000 });
+  } catch {
+    await firstDiscard.click({ force: true, timeout: 5_000 });
+  }
+  // Second Discard — the destructive confirm inside the dialog
+  const dialogDiscard = page.locator('div[role="dialog"]').getByRole('button', { name: /^Discard$/ });
+  await dialogDiscard.waitFor({ state: 'visible', timeout: 10_000 });
+  try {
+    await dialogDiscard.click({ timeout: 15_000 });
+  } catch {
+    await dialogDiscard.click({ force: true, timeout: 5_000 });
+  }
   await page.waitForTimeout(1500);
 }
 
