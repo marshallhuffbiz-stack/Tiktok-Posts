@@ -1,0 +1,27 @@
+{
+  "schedule": [
+    "08:17", "09:42", "11:08", "12:34", "14:11",
+    "15:47", "17:23", "18:58", "20:14", "21:51"
+  ],
+  "rollSlides": {
+    "carousels": 1,
+    "slidesEach": 5,
+    "secPerSlide": 4,
+    "outputMode": "Video",
+    "styleMode": "Outline",
+    "textColor": "white",
+    "outlineColor": "black",
+    "preset": null,
+    "font": "Classic",
+    "size": "52px",
+    "align": "Center"
+  },
+  "tiktok": {
+    "uploadUrl": "https://www.tiktok.com/tiktokstudio/upload",
+    "clickFirstLocationChip": true,
+    "aiGeneratedDisclosure": false,
+    "firstRunContentChecks": "Cancel"
+  },
+  "antiRepeat": { "soundLastN": 8 },
+  "retention": { "downloadsKeepDays": 7 }
+}
