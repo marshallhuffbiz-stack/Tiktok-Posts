@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "test": "node --import tsx --test test/*.test.ts",
-    "post": "tsc && node dist/post.js",
+    "inspect": "tsc && node dist/inspect.js",
     "login": "tsc && node dist/login.js",
-    "schedule": "tsc && node dist/schedule.js",
     "logs": "tail -f logs/runs.jsonl | jq -c .",
     "logs:errors": "grep -E '\"status\":\"fail\"' logs/runs.jsonl | jq",
     "pause": "launchctl bootout gui/$UID/com.user.tiktokpost",
-    "resume": "npm run schedule"
+    "post": "tsc && node dist/post.js",
+    "resume": "npm run schedule",
+    "schedule": "tsc && node dist/schedule.js",
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "playwright": "^1.59.1"

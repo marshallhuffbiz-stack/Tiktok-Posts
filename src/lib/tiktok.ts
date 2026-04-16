@@ -9,6 +9,38 @@ export class SessionExpiredError extends Error {
 const UPLOAD_URL = 'https://www.tiktok.com/tiktokstudio/upload';
 
 /**
+ * Aggressive dismissal of any lingering tour modals / tooltips / popups.
+ * Tries a set of common dismissal-button texts with very short timeouts.
+ * Any misses are silent — this is best-effort cleanup.
+ */
+async function dismissAllPopups(page: Page): Promise<void> {
+  const labels = [
+    'Got it',
+    'Skip',
+    'Skip tour',
+    'Close',
+    'Dismiss',
+    'No thanks',
+    'Not now',
+    'Maybe later',
+    'Cancel',      // may be wrong context (e.g. sounds editor) — only safe outside active editors
+    'Turn on',     // automatic-content-checks opt-in (we default to Cancel, but Turn on dismisses too)
+  ];
+  for (const name of labels) {
+    for (let i = 0; i < 3; i++) {
+      try {
+        await page.getByRole('button', { name, exact: true }).first().click({ timeout: 1500 });
+      } catch {
+        break; // none or no-longer-present — move on
+      }
+    }
+  }
+  // Belt-and-suspenders: press Escape a couple times to close any remaining tooltip overlays.
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.keyboard.press('Escape').catch(() => {});
+}
+
+/**
  * Navigates to the upload page. Throws SessionExpiredError if redirected to /login.
  * Dismisses any first-run popups ("New editing features", "Turn on automatic content checks").
  */
@@ -35,13 +67,9 @@ export async function openUploadPage(page: Page, settings: Settings): Promise<vo
     throw new Error('upload page did not finish rendering within 60s (no file input, no /login redirect)');
   }
 
-  // Dismiss the two known first-run popups, with very short timeouts because they may not appear.
-  await tryClickButton(page, 'Got it', 3_000);
-  if (settings.tiktok.firstRunContentChecks === 'Cancel') {
-    await tryClickButton(page, 'Cancel', 3_000);
-  } else {
-    await tryClickButton(page, 'Turn on', 3_000);
-  }
+  // Aggressively dismiss any tour modals / tooltips / first-run popups.
+  // Fresh Playwright Chromium sessions tend to see more of these than warm browsers.
+  await dismissAllPopups(page);
 }
 
 async function tryClickButton(page: Page, name: string, timeoutMs: number): Promise<boolean> {
