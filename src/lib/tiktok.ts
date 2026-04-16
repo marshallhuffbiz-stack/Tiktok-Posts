@@ -94,11 +94,12 @@ export async function attachVideo(page: Page, mp4Path: string): Promise<void> {
 /**
  * Replaces the auto-prefilled (filename) caption with the real caption.
  *
- * The caption is split into body + hashtags. The body is typed via insertText
- * (fast). Each hashtag is then typed character-by-character with a small delay
- * so TikTok's autocomplete dropdown fires; we press Enter after each hashtag
- * to commit it as a mention/hashtag entity (otherwise it stays as plain text
- * and TikTok publishes without hashtag links).
+ * Uses insertText to paste the entire caption (body + hashtags) at once.
+ * TikTok's backend appears to parse #word tokens at submit time as hashtags
+ * even without explicit mention/entity commits in the Draft.js editor.
+ *
+ * If we discover the published posts have plain-text hashtags (no clickable
+ * links), revisit with a per-hashtag commit approach.
  */
 export async function setCaption(page: Page, caption: string): Promise<void> {
   const editor = page.locator('.public-DraftEditor-content').first();
@@ -110,49 +111,8 @@ export async function setCaption(page: Page, caption: string): Promise<void> {
   }
   await page.keyboard.press('Meta+A');
   await page.keyboard.press('Delete');
-
-  // Split into body + hashtag tokens. The roll-slides caption shape is:
-  //   <body paragraph>\n\n<#tag1 #tag2 #tag3 ...>
-  // Some captions might not have hashtags; we handle that gracefully.
-  const hashtagPattern = /#[A-Za-z0-9_]+/g;
-  const allHashtags = caption.match(hashtagPattern) ?? [];
-  // Split off the hashtag line — everything before the FIRST # token is the body.
-  const firstHashIdx = caption.search(/(^|\s)#[A-Za-z0-9_]/);
-  const body = firstHashIdx >= 0 ? caption.slice(0, firstHashIdx).trimEnd() : caption.trimEnd();
-
-  // Type the body fast (no hashtag handling needed).
-  if (body.length > 0) {
-    await page.keyboard.insertText(body);
-  }
-
-  // Insert separator between body and hashtags (matches rollSlides output: \n\n).
-  if (allHashtags.length > 0) {
-    if (body.length > 0) {
-      // Use type to send actual newline keystrokes (Draft.js handles them via key events).
-      await page.keyboard.press('Enter');
-      await page.keyboard.press('Enter');
-    }
-
-    // Type each hashtag character-by-character + Enter to commit.
-    for (let i = 0; i < allHashtags.length; i++) {
-      const tag = allHashtags[i]!; // includes leading #
-      // type() sends individual keypresses with an optional per-char delay.
-      // 30ms is enough to let TikTok's autocomplete fire without being painfully slow.
-      await page.keyboard.type(tag, { delay: 30 });
-      // Wait briefly for the autocomplete dropdown to appear.
-      await page.waitForTimeout(500);
-      // Press Enter to commit the hashtag as a mention entity.
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(150);
-      // Add a space between hashtags (but not after the last one).
-      if (i < allHashtags.length - 1) {
-        await page.keyboard.type(' ');
-      }
-    }
-  }
-
-  // Final dismissal in case any dropdown is still showing.
-  await page.keyboard.press('Escape').catch(() => {});
+  await page.keyboard.insertText(caption);
+  await page.keyboard.press('Escape'); // dismiss any hashtag autocomplete
 }
 
 /**
