@@ -11,7 +11,6 @@ import {
   setFirstLocationChip,
   clickPost,
   waitForPostSuccess,
-  discardUpload,
   installDialogAutoAccept,
   SessionExpiredError,
   PostFailedError,
@@ -115,7 +114,10 @@ async function main() {
     }
 
     if (isDryRun) {
-      await discardUpload(browser.page);
+      // Dry-run: do NOT click Post. The post never sends. Closing the browser
+      // (in finally) discards the form. We deliberately skip the Discard
+      // confirmation UI because it's brittle and unnecessary — not clicking
+      // Post is sufficient to ensure no post.
       entry.status = 'dry-run-success';
     } else {
       await clickPost(browser.page);
