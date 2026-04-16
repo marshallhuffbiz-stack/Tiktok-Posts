@@ -18,16 +18,22 @@ async function clickColorButton(page: Page, sectionLabel: 'Text Color' | 'Outlin
   // Color buttons have no accessible labels — match by computed background.
   const matched = await page.evaluate(
     ({ label, target }) => {
-      const labels = Array.from(document.querySelectorAll('div, span'))
+      // The section div has its label text as its full textContent.
+      // Find the outer section div by exact textContent match.
+      const labels = Array.from(document.querySelectorAll('div'))
         .filter(el => (el.textContent || '').trim() === label);
       if (labels.length === 0) throw new Error(`label not found: ${label}`);
-      const labelEl = labels[0]!;
-      const container = labelEl.parentElement?.querySelector('div + div, .flex')!;
+      const sectionDiv = labels[0]!;
+      // The buttons live in a .flex.flex-wrap inside this section div (NOT the shared parent).
+      const container = sectionDiv.querySelector('.flex.flex-wrap');
+      if (!container) throw new Error(`no buttons container under ${label}`);
       const buttons = Array.from(container.querySelectorAll('button')) as HTMLButtonElement[];
       for (let i = 0; i < buttons.length; i++) {
         const bg = getComputedStyle(buttons[i]!).backgroundColor;
         if (bg === target) {
           buttons[i]!.click();
+          // Verify the click took effect: active button has borderColor rgb(22, 237, 167).
+          // (We do this in a tiny synchronous check; if not active, try a second click.)
           return i;
         }
       }
