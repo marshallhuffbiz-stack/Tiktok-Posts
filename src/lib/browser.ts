@@ -32,7 +32,7 @@ export async function openBrowser(opts: OpenBrowserOptions = {}): Promise<OpenBr
       '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
     args: [
       '--disable-blink-features=AutomationControlled',
-      ...(offScreen ? ['--window-position=10000,10000', '--window-size=1,1'] : []),
+      ...(offScreen ? ['--window-position=10000,10000'] : []),
     ],
     // 60s default action timeout; specific waits override
     timezoneId: 'America/New_York',
