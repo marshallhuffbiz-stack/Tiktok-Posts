@@ -68,6 +68,15 @@ async function main() {
   const startTs = Date.now();
   const isDryRun = process.argv.includes('--dry-run');
 
+  // Schedule jitter: sleep 0-10 minutes at fire time so the actual post timing
+  // varies day-to-day. launchd fires at fixed minutes; the human-visible post
+  // time becomes randomized. Skip in dry-run mode for fast iteration.
+  if (!isDryRun) {
+    const jitterMs = Math.floor(Math.random() * 10 * 60 * 1000); // 0-600,000 ms
+    console.log(`[jitter] sleeping ${Math.round(jitterMs / 1000)}s before posting`);
+    await new Promise(resolve => setTimeout(resolve, jitterMs));
+  }
+
   // Pre-flight
   if (!fs.existsSync(BROWSER_DATA)) {
     await notify('TikTok Schedule', 'browser-data/ missing — run `npm run login`', 'Basso');
