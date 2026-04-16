@@ -31,6 +31,9 @@ const LOCK_PATH = path.join(ROOT, '.post.lock');
 const DOWNLOADS_DIR = path.join(ROOT, 'downloads');
 const BROWSER_DATA = path.join(ROOT, 'browser-data');
 
+function sleep(ms: number): Promise<void> { return new Promise(r => setTimeout(r, ms)); }
+function rand(min: number, max: number): number { return min + Math.floor(Math.random() * (max - min)); }
+
 function classify(err: unknown): ErrorType {
   if (err instanceof SessionExpiredError) return 'tiktok-session-expired';
   if (err instanceof PostFailedError) return 'tiktok-post-failed';
@@ -110,13 +113,17 @@ async function main() {
 
     // TikTok
     await openUploadPage(browser.page, settings);
+    await sleep(rand(800, 2000));  // humanize: pause before attaching
     await attachVideo(browser.page, uploadPath);
+    await sleep(rand(800, 2000));  // humanize: pause before captioning
     await setCaption(browser.page, rs.caption);
+    await sleep(rand(500, 1500));
 
     if (settings.tiktok.clickFirstLocationChip) {
       const loc = await setFirstLocationChip(browser.page);
       if (loc) entry.location = loc;
     }
+    await sleep(rand(500, 1500));
 
     const recent = await readRecentRuns(LOG_PATH, 50);
     const sound = await pickSound(browser.page, recent, settings.antiRepeat.soundLastN);
@@ -127,6 +134,7 @@ async function main() {
       await notify('TikTok Schedule', 'Sound editor failed to open — posted with Original Sound', 'Glass');
     }
 
+    await sleep(rand(1000, 2500));  // pause before submitting
     if (isDryRun) {
       // Dry-run: do NOT click Post. The post never sends. Closing the browser
       // (in finally) discards the form. We deliberately skip the Discard
