@@ -1,0 +1,12 @@
+# .gitignore
+node_modules/
+dist/
+browser-data/
+downloads/
+logs/*
+!logs/.gitkeep
+config/topics.txt
+.post.lock
+.playwright-mcp/
+.DS_Store
+*.log

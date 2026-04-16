@@ -1,0 +1,25 @@
+{
+  "name": "tiktok-schedule",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --test --import tsx dist/test/*.test.js 2>/dev/null || node --test test/*.test.ts",
+    "post": "tsc && node dist/post.js",
+    "login": "tsc && node dist/login.js",
+    "schedule": "tsc && node dist/schedule.js",
+    "logs": "tail -f logs/runs.jsonl | jq -c .",
+    "logs:errors": "grep -E '\"status\":\"fail\"' logs/runs.jsonl | jq",
+    "pause": "launchctl bootout gui/$UID/com.user.tiktokpost",
+    "resume": "npm run schedule"
+  },
+  "dependencies": {
+    "playwright": "^1.59.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
