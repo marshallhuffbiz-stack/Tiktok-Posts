@@ -94,12 +94,14 @@ export async function attachVideo(page: Page, mp4Path: string): Promise<void> {
 /**
  * Replaces the auto-prefilled (filename) caption with the real caption.
  *
- * Uses insertText to paste the entire caption (body + hashtags) at once.
- * TikTok's backend appears to parse #word tokens at submit time as hashtags
- * even without explicit mention/entity commits in the Draft.js editor.
+ * The body is typed via insertText (fast). Each hashtag is then typed
+ * character-by-character with a small delay so TikTok's autocomplete
+ * dropdown fires; we wait for the dropdown's focused item to be visible
+ * (NOT a fixed timeout — we wait for the actual element), then press Enter
+ * to commit it as a <span class="mention"> entity. Pressing Enter auto-adds
+ * a trailing space, so we don't add our own.
  *
- * If we discover the published posts have plain-text hashtags (no clickable
- * links), revisit with a per-hashtag commit approach.
+ * Verified live: mentionCount goes from 0 -> N for N hashtags.
  */
 export async function setCaption(page: Page, caption: string): Promise<void> {
   const editor = page.locator('.public-DraftEditor-content').first();
@@ -111,8 +113,42 @@ export async function setCaption(page: Page, caption: string): Promise<void> {
   }
   await page.keyboard.press('Meta+A');
   await page.keyboard.press('Delete');
-  await page.keyboard.insertText(caption);
-  await page.keyboard.press('Escape'); // dismiss any hashtag autocomplete
+
+  // Split: body is everything before the first #token; remaining tokens are hashtags.
+  const allHashtags = caption.match(/#[A-Za-z0-9_]+/g) ?? [];
+  const firstHashIdx = caption.search(/(^|\s)#[A-Za-z0-9_]/);
+  const body = firstHashIdx >= 0 ? caption.slice(0, firstHashIdx).trimEnd() : caption.trimEnd();
+
+  // Body via fast insertText.
+  if (body.length > 0) {
+    await page.keyboard.insertText(body);
+  }
+
+  // Paragraph break before hashtags (matches the rollSlides caption shape).
+  if (allHashtags.length > 0 && body.length > 0) {
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+  }
+
+  // Type each hashtag, wait for the autocomplete focused item, press Enter to commit.
+  // Enter auto-adds a trailing space — don't add our own.
+  for (const tag of allHashtags) {
+    await page.keyboard.type(tag, { delay: 60 });
+    try {
+      await page.locator('.hashtag-suggestion-item.focused').first().waitFor({
+        state: 'visible',
+        timeout: 3_000,
+      });
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(300);
+    } catch {
+      // Dropdown didn't appear — leave the tag as plain text and move on.
+      // (Should be rare; logs would help debug.)
+    }
+  }
+
+  // Best-effort dismiss any lingering dropdown.
+  await page.keyboard.press('Escape').catch(() => {});
 }
 
 /**
