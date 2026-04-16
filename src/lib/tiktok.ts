@@ -16,6 +16,14 @@ export async function openUploadPage(page: Page, settings: Settings): Promise<vo
   await page.goto(UPLOAD_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   if (page.url().includes('/login')) throw new SessionExpiredError();
 
+  // Wait for React to render the upload form. The hidden file input is the
+  // canonical signal that the page is interactive — `attachVideo` targets it,
+  // and we've seen it take 5–30s to appear after domcontentloaded.
+  await page.locator('input[type="file"][accept="video/*"]').first().waitFor({
+    state: 'attached',
+    timeout: 60_000,
+  });
+
   // Dismiss the two known first-run popups, with very short timeouts because they may not appear.
   await tryClickButton(page, 'Got it', 3_000);
   if (settings.tiktok.firstRunContentChecks === 'Cancel') {
