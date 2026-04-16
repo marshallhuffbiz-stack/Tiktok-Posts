@@ -145,25 +145,16 @@ export class PostFailedError extends Error {
 }
 
 /**
- * Clicks the Post button. Selects the LAST enabled "Post" button on the page
- * (defends against multiple matching buttons in the DOM — there's typically a
- * navigation-rail button or icon button with the same accessible name).
+ * Clicks the Post button using TikTok's stable E2E test attribute.
  */
 export async function clickPost(page: Page): Promise<void> {
-  // Multiple buttons may have accessible name "Post" (sidebar nav vs the main
-  // action button). Use exact match and last() — the action button is rendered
-  // later in the DOM than nav items.
-  const postBtn = page.getByRole('button', { name: 'Post', exact: true }).last();
-  // Verify it's enabled before clicking. waitFor + check.
+  // TikTok's stable E2E test attribute on the post action button.
+  const postBtn = page.locator('button[data-e2e="post_video_button"]');
   await postBtn.waitFor({ state: 'attached', timeout: 30_000 });
   const isDisabled = await postBtn.isDisabled().catch(() => true);
   if (isDisabled) throw new PostFailedError('Post button is disabled');
   await postBtn.scrollIntoViewIfNeeded();
-  try {
-    await postBtn.click({ timeout: 15_000 });
-  } catch {
-    await postBtn.click({ force: true, timeout: 5_000 });
-  }
+  await postBtn.click({ timeout: 15_000 });
 }
 
 /**
