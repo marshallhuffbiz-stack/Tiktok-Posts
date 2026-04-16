@@ -109,6 +109,10 @@ async function main() {
     const sound = await pickSound(browser.page, recent, settings.antiRepeat.soundLastN);
     entry.soundName = sound.soundName;
     entry.soundFallback = sound.fallback;
+    if (sound.skipped) {
+      // Don't fail the post, but surface the degradation.
+      await notify('TikTok Schedule', 'Sound editor failed to open — posted with Original Sound', 'Glass');
+    }
 
     if (isDryRun) {
       await discardUpload(browser.page);

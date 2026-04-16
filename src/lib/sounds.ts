@@ -5,6 +5,23 @@ import type { RunEntry } from './types.js';
 export interface SoundPickResult {
   soundName: string;
   fallback: boolean;
+  /** True if the sound editor failed to open and we left Original Sound in place. */
+  skipped?: boolean;
+}
+
+export async function pickSound(
+  page: Page,
+  recentRuns: RunEntry[],
+  antiRepeatN: number,
+): Promise<SoundPickResult> {
+  try {
+    return await pickSoundInner(page, recentRuns, antiRepeatN);
+  } catch (err) {
+    // Editor didn't open or some step failed — leave the default Original Sound in place.
+    // TikTok auto-applies the video's own audio (silent for our generated videos)
+    // when no sound is explicitly added.
+    return { soundName: '<original sound>', fallback: true, skipped: true };
+  }
 }
 
 /**
@@ -12,7 +29,7 @@ export interface SoundPickResult {
  * (filtering against `recentRuns`), saves, and returns. On any failure, falls back
  * to the first sound in the For You tab (the editor's default tab).
  */
-export async function pickSound(
+async function pickSoundInner(
   page: Page,
   recentRuns: RunEntry[],
   antiRepeatN: number,
