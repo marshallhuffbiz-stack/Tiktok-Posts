@@ -97,3 +97,53 @@ export async function discardUpload(page: Page): Promise<void> {
   await page.locator('div[role="dialog"]').getByRole('button', { name: /^Discard$/ }).click();
   await page.waitForTimeout(1500);
 }
+
+export class PostFailedError extends Error {
+  constructor(reason: string) { super(`post failed: ${reason}`); this.name = 'PostFailedError'; }
+}
+
+/**
+ * Clicks the Post button. Selects the LAST enabled "Post" button on the page
+ * (defends against multiple matching buttons in the DOM — there's typically a
+ * navigation-rail button or icon button with the same accessible name).
+ */
+export async function clickPost(page: Page): Promise<void> {
+  const clicked = await page.evaluate(() => {
+    const candidates = Array.from(document.querySelectorAll('button'))
+      .filter(b => (b.textContent || '').trim() === 'Post' && !(b as HTMLButtonElement).disabled);
+    if (candidates.length === 0) return false;
+    (candidates[candidates.length - 1] as HTMLButtonElement).click();
+    return true;
+  });
+  if (!clicked) throw new PostFailedError('no enabled Post button found');
+}
+
+/**
+ * Waits for evidence that the post succeeded.
+ *
+ * Locked from Task 11 spike: TikTok's success signal is a URL change from
+ * /tiktokstudio/upload → /tiktokstudio/content within ~2 seconds.
+ *
+ * Throws PostFailedError on timeout.
+ */
+export async function waitForPostSuccess(page: Page): Promise<void> {
+  try {
+    await page.waitForURL(/tiktokstudio\/content/, { timeout: 60_000 });
+  } catch (err) {
+    throw new PostFailedError(`URL did not change to /tiktokstudio/content within 60s (still at ${page.url()})`);
+  }
+}
+
+/**
+ * Installs a `dialog` event handler that auto-accepts any popup (including
+ * `beforeunload`). TikTok fires `beforeunload` when navigating away from
+ * a populated upload form, which it does on a successful post — without this
+ * handler, navigation hangs and waitForPostSuccess times out.
+ *
+ * Call this ONCE per Page, BEFORE clickPost.
+ */
+export function installDialogAutoAccept(page: Page): void {
+  page.on('dialog', async (d) => {
+    try { await d.accept(); } catch { /* dialog already gone */ }
+  });
+}
