@@ -150,14 +150,20 @@ export class PostFailedError extends Error {
  * navigation-rail button or icon button with the same accessible name).
  */
 export async function clickPost(page: Page): Promise<void> {
-  const clicked = await page.evaluate(() => {
-    const candidates = Array.from(document.querySelectorAll('button'))
-      .filter(b => (b.textContent || '').trim() === 'Post' && !(b as HTMLButtonElement).disabled);
-    if (candidates.length === 0) return false;
-    (candidates[candidates.length - 1] as HTMLButtonElement).click();
-    return true;
-  });
-  if (!clicked) throw new PostFailedError('no enabled Post button found');
+  // Multiple buttons may have accessible name "Post" (sidebar nav vs the main
+  // action button). Use exact match and last() — the action button is rendered
+  // later in the DOM than nav items.
+  const postBtn = page.getByRole('button', { name: 'Post', exact: true }).last();
+  // Verify it's enabled before clicking. waitFor + check.
+  await postBtn.waitFor({ state: 'attached', timeout: 30_000 });
+  const isDisabled = await postBtn.isDisabled().catch(() => true);
+  if (isDisabled) throw new PostFailedError('Post button is disabled');
+  await postBtn.scrollIntoViewIfNeeded();
+  try {
+    await postBtn.click({ timeout: 15_000 });
+  } catch {
+    await postBtn.click({ force: true, timeout: 5_000 });
+  }
 }
 
 /**
