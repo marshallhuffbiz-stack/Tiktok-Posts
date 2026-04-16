@@ -88,6 +88,9 @@ config/topics.txt
 .playwright-mcp/
 .DS_Store
 *.log
+*.jpeg
+*.jpg
+*.png
 ```
 
 - [ ] **Step 1.3: Create `tsconfig.json`**
@@ -96,8 +99,8 @@ config/topics.txt
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
@@ -128,7 +131,7 @@ The current `package.json` from `npm init -y` should be edited to look like this
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node --test --import tsx dist/test/*.test.js 2>/dev/null || node --test test/*.test.ts",
+    "test": "node --import tsx --test test/*.test.ts",
     "post": "tsc && node dist/post.js",
     "login": "tsc && node dist/login.js",
     "schedule": "tsc && node dist/schedule.js",

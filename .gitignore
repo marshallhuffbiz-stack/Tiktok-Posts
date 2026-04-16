@@ -10,3 +10,6 @@ config/topics.txt
 .playwright-mcp/
 .DS_Store
 *.log
+*.jpeg
+*.jpg
+*.png
