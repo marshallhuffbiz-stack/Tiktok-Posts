@@ -116,23 +116,28 @@ export async function setCaption(page: Page, caption: string): Promise<void> {
 }
 
 /**
- * Clicks the first chip in the row of suggested locations under "Search locations".
+ * Clicks a RANDOM chip in the row of suggested locations under "Search locations".
  * Returns the location name, or null if no chips were available.
  *
  * Selectors verified live: .poi-suggestion is the container, .suggest-item is each chip.
+ * Random pick (not always first) reduces "same location every post" detection signal.
  */
-export async function setFirstLocationChip(page: Page): Promise<string | null> {
+export async function setRandomLocationChip(page: Page): Promise<string | null> {
   const result = await page.evaluate(() => {
     const chips = Array.from(document.querySelectorAll('.poi-suggestion .suggest-item'));
     if (chips.length === 0) return { clicked: false as const };
-    const first = chips[0] as HTMLElement;
-    const text = (first.textContent || '').trim();
-    first.click();
+    const idx = Math.floor(Math.random() * chips.length);
+    const chosen = chips[idx] as HTMLElement;
+    const text = (chosen.textContent || '').trim();
+    chosen.click();
     return { clicked: true as const, name: text };
   });
   if (!result.clicked) return null;
   return result.name ?? null;
 }
+
+// Keep the old name as an alias for backwards compat — orchestrator can use either.
+export const setFirstLocationChip = setRandomLocationChip;
 
 /**
  * Clicks Discard, then confirms in the dialog. Used for --dry-run smoke tests.
