@@ -18,9 +18,21 @@ export async function pickSound(
   antiRepeatN: number,
 ): Promise<SoundPickResult> {
   // Open the Sounds editor.
-  await page.getByRole('button', { name: 'Sounds' }).click();
-  // The editor view is identifiable by the title becoming "My Multimedia Project".
-  await page.getByText('My Multimedia Project').waitFor({ timeout: 30_000 });
+  // Two buttons match "Sounds": a sidebar promo "Unlimited Sounds" (substring match)
+  // and the right-toolbar editor button. Use exact:true and last() for safety,
+  // plus scroll-into-view + force click since the right-toolbar button can be
+  // below the viewport fold.
+  const soundsBtn = page.getByRole('button', { name: 'Sounds', exact: true }).last();
+  await soundsBtn.scrollIntoViewIfNeeded();
+  await soundsBtn.click({ force: true, timeout: 15_000 });
+  // Wait for ANY of the editor signals — the title can change between TikTok
+  // releases, so we accept the Save button OR any of the tab labels OR the title.
+  await Promise.race([
+    page.getByText('My Multimedia Project').waitFor({ timeout: 30_000 }),
+    page.getByRole('button', { name: 'Save', exact: true }).first().waitFor({ timeout: 30_000 }),
+    page.getByText('For You', { exact: true }).first().waitFor({ timeout: 30_000 }),
+    page.getByText('Favorites', { exact: true }).first().waitFor({ timeout: 30_000 }),
+  ]);
 
   const recentSoundNames = new Set(
     recentRuns
