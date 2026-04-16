@@ -69,7 +69,17 @@ export async function attachVideo(page: Page, mp4Path: string): Promise<void> {
  */
 export async function setCaption(page: Page, caption: string): Promise<void> {
   const editor = page.locator('.public-DraftEditor-content').first();
-  await editor.click();
+  // Wait for the editor to exist in the DOM before trying to interact.
+  await editor.waitFor({ state: 'attached', timeout: 30_000 });
+  // Use force:true to bypass Playwright's actionability checks. The Draft.js
+  // editor sometimes gets a transient pointer-events block during the upload
+  // settle phase; we just need a click event to fire so the element gains focus.
+  try {
+    await editor.click({ force: true, timeout: 10_000 });
+  } catch {
+    // Final fallback: focus directly via JS
+    await editor.evaluate((el) => (el as HTMLElement).focus());
+  }
   await page.keyboard.press('Meta+A');
   await page.keyboard.press('Delete');
   await page.keyboard.insertText(caption);
