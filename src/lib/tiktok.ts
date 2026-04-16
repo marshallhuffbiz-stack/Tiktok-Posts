@@ -117,29 +117,17 @@ export async function setCaption(page: Page, caption: string): Promise<void> {
 /**
  * Clicks the first chip in the row of suggested locations under "Search locations".
  * Returns the location name, or null if no chips were available.
+ *
+ * Selectors verified live: .poi-suggestion is the container, .suggest-item is each chip.
  */
 export async function setFirstLocationChip(page: Page): Promise<string | null> {
-  // Locate the "Location" label, then the suggestion list directly below it.
-  // Chips are <li><div>Name</div></li> — the last item ("Advance") is a "see more" link, skip it.
   const result = await page.evaluate(() => {
-    const labels = Array.from(document.querySelectorAll('div, span'))
-      .filter(el => (el.textContent || '').trim() === 'Location' && el.children.length === 0);
-    if (labels.length === 0) return { clicked: false, reason: 'no Location label' };
-    const labelParent = labels[0]!.parentElement?.parentElement;
-    if (!labelParent) return { clicked: false, reason: 'no parent' };
-    const list = labelParent.querySelector('ul, [role="list"]') as HTMLElement | null;
-    if (!list) return { clicked: false, reason: 'no chip list' };
-    const items = Array.from(list.querySelectorAll('li')) as HTMLLIElement[];
-    // Filter out the "Advance" / "See more" entry by checking text length / known label.
-    const usable = items.filter(li => {
-      const t = (li.textContent || '').trim();
-      return t.length > 0 && t.toLowerCase() !== 'advance';
-    });
-    if (usable.length === 0) return { clicked: false, reason: 'no usable chips' };
-    const first = usable[0]!;
+    const chips = Array.from(document.querySelectorAll('.poi-suggestion .suggest-item'));
+    if (chips.length === 0) return { clicked: false as const };
+    const first = chips[0] as HTMLElement;
     const text = (first.textContent || '').trim();
-    (first as HTMLElement).click();
-    return { clicked: true, name: text };
+    first.click();
+    return { clicked: true as const, name: text };
   });
   if (!result.clicked) return null;
   return result.name ?? null;
