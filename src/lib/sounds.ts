@@ -20,11 +20,13 @@ export async function pickSound(
   // Open the Sounds editor.
   // Two buttons match "Sounds": a sidebar promo "Unlimited Sounds" (substring match)
   // and the right-toolbar editor button. Use exact:true and last() for safety,
-  // plus scroll-into-view + force click since the right-toolbar button can be
-  // below the viewport fold.
+  // plus scroll-into-view since the right-toolbar button can be below the viewport fold.
   const soundsBtn = page.getByRole('button', { name: 'Sounds', exact: true }).last();
   await soundsBtn.scrollIntoViewIfNeeded();
-  await soundsBtn.click({ force: true, timeout: 15_000 });
+  // Standard click (no force:true) — Playwright auto-scrolls again and waits for
+  // actionability so the click lands on the actually-visible element. The button
+  // is at y~967 in our 800px viewport; scrollIntoViewIfNeeded brings it into view.
+  await soundsBtn.click({ timeout: 15_000 });
   // Wait for ANY of the editor signals — the title can change between TikTok
   // releases, so we accept the Save button OR any of the tab labels OR the title.
   await Promise.race([
