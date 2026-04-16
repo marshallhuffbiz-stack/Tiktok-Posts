@@ -21,6 +21,7 @@ import { notify } from './lib/notify.js';
 import { acquireLock } from './lib/lockfile.js';
 import { spawnSync } from 'node:child_process';
 import type { Settings, RunEntry, ErrorType } from './lib/types.js';
+import { sanitizeVideo } from './lib/sanitizeVideo.js';
 
 const ROOT = process.cwd();
 const SETTINGS_PATH = path.join(ROOT, 'config', 'settings.json');
@@ -94,9 +95,13 @@ async function main() {
     entry.slug = rs.slug;
     entry.captionFirst80 = rs.caption.slice(0, 80);
 
+    // Re-encode with Apple HW encoder + iPhone metadata to mask the libx264/FFmpeg
+    // fingerprint TikTok uses to flag automated content.
+    const uploadPath = sanitizeVideo(rs.videoPath);
+
     // TikTok
     await openUploadPage(browser.page, settings);
-    await attachVideo(browser.page, rs.videoPath);
+    await attachVideo(browser.page, uploadPath);
     await setCaption(browser.page, rs.caption);
 
     if (settings.tiktok.clickFirstLocationChip) {
