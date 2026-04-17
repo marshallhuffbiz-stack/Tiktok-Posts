@@ -161,9 +161,15 @@ export async function setCaption(page: Page, caption: string): Promise<void> {
 export async function setRandomLocationChip(page: Page): Promise<string | null> {
   const result = await page.evaluate(() => {
     const chips = Array.from(document.querySelectorAll('.poi-suggestion .suggest-item'));
-    if (chips.length === 0) return { clicked: false as const };
-    const idx = Math.floor(Math.random() * chips.length);
-    const chosen = chips[idx] as HTMLElement;
+    // Filter out the "Advance" link (it's a "see more" that opens a location
+    // search modal — not a real location chip).
+    const usable = chips.filter((el) => {
+      const t = (el.textContent || '').trim().toLowerCase();
+      return t.length > 0 && t !== 'advance';
+    });
+    if (usable.length === 0) return { clicked: false as const };
+    const idx = Math.floor(Math.random() * usable.length);
+    const chosen = usable[idx] as HTMLElement;
     const text = (chosen.textContent || '').trim();
     chosen.click();
     return { clicked: true as const, name: text };
