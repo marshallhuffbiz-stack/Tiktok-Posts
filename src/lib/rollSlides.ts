@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { Settings, RollSlidesResult } from './types.js';
 
 const URL = 'https://rent-roll-slides.vercel.app/';

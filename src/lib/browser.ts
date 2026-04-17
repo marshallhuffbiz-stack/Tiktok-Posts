@@ -1,15 +1,7 @@
 // src/lib/browser.ts
 import path from 'node:path';
-import type { BrowserContext, Page } from 'playwright';
-import { chromium as chromiumExtra } from 'playwright-extra';
-// @ts-ignore — puppeteer-extra-plugin-stealth has no TS types
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-
-// Apply stealth once at module load. Hides navigator.webdriver, fills in
-// navigator.plugins, masks WebGL renderer string, fixes Notification.permission,
-// and several dozen other automation tells. This is the canonical fix for
-// "same content, manual upload OK, scripted upload flagged" detection patterns.
-chromiumExtra.use(StealthPlugin());
+import type { BrowserContext, Page } from 'patchright';
+import { chromium } from 'patchright';
 
 export interface OpenBrowserOptions {
   /** Absolute path to the persistent data dir. Default: ./browser-data/ */
@@ -27,23 +19,22 @@ export interface OpenBrowserResult {
 
 export async function openBrowser(opts: OpenBrowserOptions = {}): Promise<OpenBrowserResult> {
   const dataDir = opts.dataDir ?? path.resolve('browser-data');
-  // Headed by default — TikTok's React handlers (Sounds editor open, Post submit)
-  // don't reliably fire from programmatic clicks in headless mode. We launch
-  // headed but push the window off-screen so it doesn't visually disrupt the
-  // user when the schedule fires. opts.headed=true is for the login flow which
-  // wants the window visible.
   const offScreen = !opts.headed;
-  const context = await chromiumExtra.launchPersistentContext(dataDir, {
-    headless: false, // always headed
-    viewport: { width: 1280, height: 800 },
-    userAgent:
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-      '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+  // Patchright with channel:'chrome' launches the user's installed Google Chrome
+  // (NOT bundled Chromium). This passes browser-fingerprint checks that flag
+  // bundled Chromium (missing Widevine, missing proprietary AAC, wrong
+  // userAgentData.brands, etc.). Patchright also patches the CDP Runtime.Enable
+  // leak that standard playwright-stealth/puppeteer-extra-plugin-stealth do NOT.
+  const context = await chromium.launchPersistentContext(dataDir, {
+    channel: 'chrome',
+    headless: false,
+    // No viewport override — let real Chrome use its native viewport.
+    // (Patchright docs: omit no_viewport in TS by passing viewport: null.)
+    viewport: null,
+    // No user agent override — real Chrome sends a real Chrome UA.
     args: [
-      '--disable-blink-features=AutomationControlled',
       ...(offScreen ? ['--window-position=10000,10000'] : []),
     ],
-    // 60s default action timeout; specific waits override
     timezoneId: 'America/New_York',
   });
   context.setDefaultTimeout(60_000);

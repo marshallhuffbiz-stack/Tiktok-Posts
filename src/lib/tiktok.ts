@@ -1,5 +1,5 @@
 // src/lib/tiktok.ts
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { Settings, TikTokResult } from './types.js';
 
 export class SessionExpiredError extends Error {

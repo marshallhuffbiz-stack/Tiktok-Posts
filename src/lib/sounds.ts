@@ -1,5 +1,5 @@
 // src/lib/sounds.ts
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { RunEntry } from './types.js';
 
 export interface SoundPickResult {
