@@ -56,12 +56,41 @@ async function main() {
     consoleStream.write(JSON.stringify({ type: msg.type(), text: msg.text() }) + '\n');
   });
 
+  // Dump whatever state Patchright is in right now, regardless of error.
+  // Lets us diagnose captchas, dialogs, or unexpected popups blocking the upload.
+  async function dumpState(tag: string): Promise<void> {
+    try {
+      const file = path.join(OUT_DIR, `state-${tag}.png`);
+      await browser.page.screenshot({ path: file, fullPage: true });
+      console.log(`[capture]   dumped: ${file}`);
+    } catch (e) { console.warn('[capture]   screenshot failed:', (e as Error).message); }
+    try {
+      const html = await browser.page.content();
+      fs.writeFileSync(path.join(OUT_DIR, `state-${tag}.html`), html);
+    } catch { /* ignore */ }
+    try {
+      const url = browser.page.url();
+      fs.appendFileSync(path.join(OUT_DIR, 'state-urls.log'), `${tag}: ${url}\n`);
+      console.log(`[capture]   url: ${url}`);
+    } catch { /* ignore */ }
+  }
+
   try {
     console.log('[capture] Step 3/5 — opening upload page + attaching video');
-    await openUploadPage(browser.page, settings);
+    try {
+      await openUploadPage(browser.page, settings);
+    } catch (err) {
+      await dumpState('openUploadPage-failed');
+      throw err;
+    }
     await sleep(1500);
     await browser.page.screenshot({ path: path.join(OUT_DIR, 'screenshot-1-upload.png'), fullPage: true });
-    await attachVideo(browser.page, b.videoPath);
+    try {
+      await attachVideo(browser.page, b.videoPath);
+    } catch (err) {
+      await dumpState('attachVideo-failed');
+      throw err;
+    }
     console.log('[capture]   upload complete');
     await sleep(2000);  // let TikTok render preview + edit affordance
     await browser.page.screenshot({ path: path.join(OUT_DIR, 'screenshot-2-attached.png'), fullPage: true });
