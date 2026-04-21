@@ -111,8 +111,39 @@ async function openEditor(page: Page, s: EditorSelectors): Promise<void> {
 }
 
 async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Promise<void> {
+  // Click the Text tool → opens AddTextPresetPanel
   await page.locator(s.textTool).click();
-  const input = page.locator(s.textInput);
+  await page.waitForTimeout(500);
+
+  // Click the first preset to add a text clip to the timeline. TikTok's
+  // preset panel doesn't expose a single stable selector, so we try a
+  // few heuristics. Any of them adding a text clip is enough.
+  const presetTried: string[] = [];
+  const presetCandidates = [
+    '[class*="AddTextPreset"] [class*="item"]',
+    '[class*="AddTextPreset"] button',
+    '[class*="TextPreset"] [class*="item"]',
+    '[class*="Preset"] button',
+    '[class*="Preset"] [role="button"]',
+  ];
+  let presetClicked = false;
+  for (const sel of presetCandidates) {
+    presetTried.push(sel);
+    try {
+      const loc = page.locator(sel).first();
+      if (await loc.count().catch(() => 0) > 0) {
+        await loc.click({ timeout: 2000 });
+        presetClicked = true;
+        break;
+      }
+    } catch { /* try next */ }
+  }
+  if (!presetClicked) {
+    throw new OverlayApplicationFailed(`no text preset matched any of: ${presetTried.join(', ')}`);
+  }
+
+  // Text input / contenteditable should now be focused
+  const input = page.locator(s.textInput).first();
   await input.waitFor({ state: 'visible', timeout: DEFAULT_TIMEOUT_MS });
   await input.click();
 
