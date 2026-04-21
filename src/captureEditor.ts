@@ -138,6 +138,40 @@ async function main() {
 
     await browser.page.screenshot({ path: path.join(OUT_DIR, 'screenshot-4-editor-open.png'), fullPage: true });
 
+    // Try to drive one step deeper: click the Text tool, then the first preset,
+    // so the dumped state includes the text input + timeline text clip.
+    try {
+      console.log('[capture] Clicking Text tool to expose text panel...');
+      await browser.page.locator('button[data-button-name="text"]').first().click({ timeout: 3000 });
+      await sleep(1500);
+      await browser.page.screenshot({ path: path.join(OUT_DIR, 'screenshot-5-text-panel.png'), fullPage: true });
+
+      // Click whatever looks like a preset in the left panel
+      const presetCandidates = [
+        '[class*="TextPreset"] [class*="item"]',
+        '[class*="AddTextPreset"] > div > div',
+        '[class*="preset" i] button',
+        '.AddTextPresetPanel button',
+      ];
+      let presetClicked = false;
+      for (const sel of presetCandidates) {
+        try {
+          const loc = browser.page.locator(sel).first();
+          if ((await loc.count()) > 0) {
+            await loc.click({ timeout: 2000 });
+            presetClicked = true;
+            console.log(`[capture]   clicked preset via ${sel}`);
+            break;
+          }
+        } catch { /* try next */ }
+      }
+      if (!presetClicked) console.log('[capture]   could not auto-click a text preset');
+      await sleep(1500);
+      await browser.page.screenshot({ path: path.join(OUT_DIR, 'screenshot-6-text-added.png'), fullPage: true });
+    } catch (e) {
+      console.warn('[capture]   text-panel drive failed:', (e as Error).message);
+    }
+
     // Full page HTML (may be large; we save a trimmed version + full)
     const fullHtml = await browser.page.content();
     fs.writeFileSync(path.join(OUT_DIR, 'page.html'), fullHtml);
