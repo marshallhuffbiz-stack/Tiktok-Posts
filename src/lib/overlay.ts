@@ -106,71 +106,71 @@ export function loadSelectors(filePath: string = resolveSelectorsPath()): Editor
 }
 
 async function openEditor(page: Page, s: EditorSelectors): Promise<void> {
-  await page.locator(s.editorEntryButton).first().click({ force: true, timeout: 5000 });
+  const btn = page.locator(s.editorEntryButton).first();
+  await btn.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => { /* best-effort */ });
+  await btn.waitFor({ state: 'visible', timeout: 10_000 });
+  const box = await btn.boundingBox();
+  if (!box) throw new OverlayApplicationFailed('editor entry button has no bounding box');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(150);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.locator(s.editorModalRoot).waitFor({ state: 'visible', timeout: DEFAULT_TIMEOUT_MS });
-  // Let the editor finish its mount animation + dismiss any first-run editor
-  // tour ("New features", "Got it", etc.) that might cover toolbar buttons.
-  await page.waitForTimeout(1200);
-  const popupLabels = ['Got it', 'Skip', 'Close', 'Dismiss', 'No thanks', 'Not now', 'Maybe later'];
-  for (const name of popupLabels) {
-    try { await page.getByRole('button', { name, exact: true }).first().click({ timeout: 800 }); } catch { /* no popup */ }
-  }
-  await page.keyboard.press('Escape').catch(() => {});
+  // Give the editor 2s to fully hydrate its React components before we try
+  // clicking toolbar buttons. React's onClick handlers only fire for trusted
+  // events targeting elements whose listeners have fully mounted.
+  await page.waitForTimeout(2000);
 }
 
 async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Promise<void> {
-  // TikTok's Sidebar button sometimes doesn't respond to Playwright's synthetic
-  // clicks even with force:true. Dispatch a real click on the DOM node via JS
-  // AND invoke any React onClick via pointer events sequence. Then retry the
-  // panel-open check. Fail loudly if the panel never opens.
-  const panelOpened = await page.evaluate(async (sel) => {
-    const btn = document.querySelector(sel) as HTMLButtonElement | null;
-    if (!btn) return { opened: false, reason: 'button not found' };
-    // Fire pointerdown → mousedown → pointerup → mouseup → click in order
-    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-      btn.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+  // Click Text tool. Try a cascade of click methods because TikTok's editor
+  // sometimes needs a specific event style.
+  const textBtn = page.locator(s.textTool).first();
+  await textBtn.waitFor({ state: 'visible', timeout: 10_000 });
+  const box = await textBtn.boundingBox();
+  if (!box) throw new OverlayApplicationFailed('Text tool has no bounding box');
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+
+  // Diagnostic: attach a click-listener on the button BEFORE clicking to
+  // verify the click events are actually landing there.
+  await page.evaluate((sel) => {
+    const btn = document.querySelector(sel);
+    if (btn) {
+      (window as unknown as { __textClickCount: number }).__textClickCount = 0;
+      btn.addEventListener('click', () => {
+        (window as unknown as { __textClickCount: number }).__textClickCount += 1;
+      }, true);
     }
-    // Also trigger native click (idempotent)
-    btn.click();
-    // Wait up to 3s for AddTextPresetPanel (or any visible Preset-class container) to appear
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 100));
-      const presetPanel = document.querySelector('[class*="AddTextPreset"], [class*="TextPreset"]');
-      if (presetPanel) return { opened: true, panelClass: (presetPanel as HTMLElement).className };
-    }
-    return { opened: false, reason: 'panel did not appear within 3s of click' };
   }, s.textTool);
 
-  if (!panelOpened.opened) {
-    throw new OverlayApplicationFailed(`Text tool click did not open preset panel: ${('reason' in panelOpened) ? panelOpened.reason : 'unknown'}`);
-  }
-  console.log(`[overlay] preset panel opened (${'panelClass' in panelOpened ? panelOpened.panelClass : ''})`);
+  // Diagnostic: what element IS at our click coordinates?
+  const elementAtPoint = await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    if (!el) return 'null';
+    return `<${el.tagName.toLowerCase()}> class="${(el.className || '').toString().slice(0, 80)}"`;
+  }, { x: cx, y: cy });
+  console.log(`[overlay] element at (${cx.toFixed(0)}, ${cy.toFixed(0)}): ${elementAtPoint}`);
 
-  // Click the first preset to add a text clip to the timeline.
-  const presetTried: string[] = [];
-  const presetCandidates = [
-    '[class*="AddTextPreset"] [class*="item"]',
-    '[class*="AddTextPreset"] button',
-    '[class*="TextPreset"] [class*="item"]',
-    '[class*="AddTextPreset"] > div > div',
-    '[class*="Preset"] button',
-    '[class*="Preset"] [role="button"]',
-  ];
-  let presetClicked = false;
-  for (const sel of presetCandidates) {
-    presetTried.push(sel);
-    try {
-      const loc = page.locator(sel).first();
-      if (await loc.count().catch(() => 0) > 0) {
-        await loc.click({ force: true, timeout: 3000 });
-        presetClicked = true;
-        break;
-      }
-    } catch { /* try next */ }
+  // Click the sidebar Text menu item to open AddTextPanel
+  await textBtn.click({ timeout: 5000 });
+
+  // Wait for AddTextPanel__root to appear in DOM (up to 5s).
+  const panelOpened = await page.evaluate(async () => {
+    for (let i = 0; i < 50; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      const p = document.querySelector('[class*="AddTextPanel__root"]');
+      if (p) return { opened: true };
+    }
+    return { opened: false };
+  });
+  if (!panelOpened.opened) {
+    throw new OverlayApplicationFailed('Text tool click did not open AddTextPanel');
   }
-  if (!presetClicked) {
-    throw new OverlayApplicationFailed(`no text preset matched any of: ${presetTried.join(', ')}`);
-  }
+  console.log('[overlay] AddTextPanel opened');
+
+  // Click the "Add text" basic button — this adds a plain text clip to the
+  // timeline without applying any preset effect.
+  await page.locator('[class*="AddTextPanel__addTextBasicButton"]').first().click({ timeout: 5000 });
 
   // Text input / contenteditable should now be focused
   const input = page.locator(s.textInput).first();
@@ -196,39 +196,39 @@ async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Pro
 }
 
 /**
- * Read the selected text clip's rendered duration (in seconds) from the
- * DOM. Looks for a data-duration attribute first; then a computed width
- * divided by a computed px-per-sec; falls back to 0 if neither are found.
- *
- * If your editor uses a different attribute for duration, update the
- * extraction logic here — it's the single point of span verification.
+ * Read the selected text clip's rendered duration in seconds. TikTok's
+ * timeline has no data-duration attribute; instead we compute it from the
+ * ratio of the text clip's rendered width to the TimeRuler's rendered
+ * width (the total-video axis), scaled by the known video duration.
  */
-async function readOverlaySpanSec(page: Page, s: EditorSelectors): Promise<number> {
-  return await page.evaluate((sel) => {
-    const el = document.querySelector(sel) as HTMLElement | null;
-    if (!el) return 0;
-    const dur = el.getAttribute('data-duration');
-    if (dur) {
-      const n = parseFloat(dur);
-      return Number.isFinite(n) ? n : 0;
-    }
-    // Heuristic fallback: if there's a data-total-sec on the timeline root,
-    // use that + the clip's width / timeline width.
-    const timeline = el.closest('[data-total-sec]') as HTMLElement | null;
-    if (timeline) {
-      const total = parseFloat(timeline.getAttribute('data-total-sec') || '0');
-      const clipW = el.getBoundingClientRect().width;
-      const tlW = timeline.getBoundingClientRect().width;
-      if (total > 0 && tlW > 0) return total * (clipW / tlW);
-    }
-    return 0;
-  }, s.selectedTextClip);
+async function readOverlaySpanSec(
+  page: Page, s: EditorSelectors, videoDurationSec: number,
+): Promise<number> {
+  return await page.evaluate(({ sel, videoSec }) => {
+    // Find the SELECTED text clip — it has TextClip__root inside a BaseClip
+    // that's marked isSelected-true. Otherwise fall back to the last TextClip.
+    const selectedBaseClip = document.querySelector(
+      '.BaseClip__root--isSelected-true'
+    ) as HTMLElement | null;
+    const textClipParent = selectedBaseClip
+      || document.querySelector(sel) as HTMLElement | null;
+    if (!textClipParent) return 0;
+
+    const clipRect = textClipParent.getBoundingClientRect();
+    const ruler = document.querySelector('.TimeRuler__root') as HTMLElement | null;
+    if (!ruler) return 0;
+    const rulerRect = ruler.getBoundingClientRect();
+    if (rulerRect.width <= 0) return 0;
+
+    // Fraction of ruler the clip covers, then scale by videoSec.
+    return videoSec * (clipRect.width / rulerRect.width);
+  }, { sel: s.selectedTextClip, videoSec: videoDurationSec });
 }
 
 async function verifySpan(
   page: Page, s: EditorSelectors, videoDurationSec: number,
 ): Promise<void> {
-  const actual = await readOverlaySpanSec(page, s);
+  const actual = await readOverlaySpanSec(page, s, videoDurationSec);
   const frac = spanFraction(actual, videoDurationSec);
   if (frac < 0.9) {
     throw new OverlayApplicationFailed(
@@ -240,6 +240,16 @@ async function verifySpan(
 async function extendOverlayToVideoEnd(
   page: Page, s: EditorSelectors, videoDurationSec: number,
 ): Promise<void> {
+  // Strategy 0: maybe it's already full span. TikTok's "Add text basic" adds
+  // a clip that spans the whole timeline by default — no drag needed.
+  try {
+    const existingSpan = await readOverlaySpanSec(page, s, videoDurationSec);
+    if (spanFraction(existingSpan, videoDurationSec) >= 0.9) {
+      console.log(`[overlay] text clip already full-span (${existingSpan.toFixed(1)}s of ${videoDurationSec.toFixed(1)}s)`);
+      return;
+    }
+  } catch { /* fall through to active strategies */ }
+
   // Strategy 1: numeric duration input (simplest and most reliable if present)
   if (s.durationInput) {
     const di = page.locator(s.durationInput);

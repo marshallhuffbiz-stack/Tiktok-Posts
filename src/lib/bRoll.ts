@@ -189,7 +189,17 @@ export async function generateBRoll(
   let lastAspect = '';
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const resp = await callApi(settings);
+    let resp: BRollResponse;
+    try {
+      resp = await callApi(settings);
+    } catch (err) {
+      // Transient HTTP errors (500, 502, 503, fetch failures) — retry silently
+      if (err instanceof BRollApiError && attempt < maxAttempts) {
+        console.log(`[bRoll] attempt ${attempt} API error, retrying: ${err.message}`);
+        continue;
+      }
+      throw err;
+    }
     lastResp = resp;
     const aspect = parseAspectRatio(resp.processing);
     lastAspect = aspect;

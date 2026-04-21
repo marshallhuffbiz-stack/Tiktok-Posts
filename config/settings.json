@@ -25,7 +25,7 @@
     "audience": "both",
     "controversy": 3,
     "pullTrending": true,
-    "overlayRetries": 8
+    "overlayRetries": 15
   },
   "tiktok": {
     "uploadUrl": "https://www.tiktok.com/tiktokstudio/upload",

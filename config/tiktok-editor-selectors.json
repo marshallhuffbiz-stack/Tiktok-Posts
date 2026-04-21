@@ -1,9 +1,9 @@
 {
-  "editorEntryButton": "button[data-button-name=\"edit\"]",
+  "editorEntryButton": "#open-new-editor button[data-button-name=\"edit\"]",
   "editorModalRoot": ".Editor__root",
-  "textTool": "button[data-button-name=\"text\"]",
-  "textInput": "[contenteditable=\"true\"]",
-  "selectedTextClip": ".BaseClip__root--isSelected-true",
+  "textTool": "div[data-name=\"AddTextPresetPanel\"]",
+  "textInput": ".ProseMirror[role=\"textbox\"]",
+  "selectedTextClip": ".TextClip__root",
   "timelineRoot": ".Timeline__viewport",
   "timelineHandle": ".BaseClip__rightTrimHandler",
   "editorSaveButton": "button.button:has-text(\"Save\"):not([data-e2e])"
