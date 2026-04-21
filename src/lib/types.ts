@@ -1,5 +1,17 @@
 // src/lib/types.ts
 
+export interface BRollSettings {
+  category: string;
+  minSec: number;
+  maxSec: number;
+  cropServerSide: boolean;
+  generateText: boolean;
+  audience: 'both' | 'landlord' | 'investor';
+  controversy: 1 | 2 | 3 | 4 | 5;
+  pullTrending: boolean;
+  overlayRetries: number;
+}
+
 export interface Settings {
   schedule: string[]; // ["HH:MM", ...]
   rollSlides: {
@@ -15,6 +27,7 @@ export interface Settings {
     size: string; // e.g. "52px"
     align: 'Left' | 'Center' | 'Right';
   };
+  bRoll: BRollSettings;
   tiktok: {
     uploadUrl: string;
     clickFirstLocationChip: boolean;
@@ -64,6 +77,18 @@ export interface RollSlidesResult {
   hashtags: string;
   slug: string;
   carouselTitle: string;
+}
+
+export interface BRollResult {
+  videoPath: string;       // raw Mixkit bitstream written to disk
+  overlayPath: string;     // overlay.txt
+  overlayText: string;     // loaded convenience copy
+  captionPath: string;     // caption.txt
+  caption: string;         // body + hashtags as will be pasted into TikTok
+  hashtags: string;        // tags only, for the hashtag-entity commit loop
+  slug: string;            // e.g. "garden", used in filenames — from sourceCategory
+  clipDurationSec: number; // durationSec from API response
+  aspectRatio: string;     // "WxH" parsed from processing string
 }
 
 export interface TikTokResult {

@@ -16,6 +16,17 @@
     "size": "52px",
     "align": "Center"
   },
+  "bRoll": {
+    "category": "Any (random)",
+    "minSec": 8,
+    "maxSec": 13,
+    "cropServerSide": false,
+    "generateText": true,
+    "audience": "both",
+    "controversy": 3,
+    "pullTrending": true,
+    "overlayRetries": 3
+  },
   "tiktok": {
     "uploadUrl": "https://www.tiktok.com/tiktokstudio/upload",
     "clickFirstLocationChip": true,
