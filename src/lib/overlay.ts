@@ -106,7 +106,7 @@ export function loadSelectors(filePath: string = resolveSelectorsPath()): Editor
 }
 
 async function openEditor(page: Page, s: EditorSelectors): Promise<void> {
-  await page.locator(s.editorEntryButton).click();
+  await page.locator(s.editorEntryButton).first().click({ force: true, timeout: 5000 });
   await page.locator(s.editorModalRoot).waitFor({ state: 'visible', timeout: DEFAULT_TIMEOUT_MS });
   // Let the editor finish its mount animation + dismiss any first-run editor
   // tour ("New features", "Got it", etc.) that might cover toolbar buttons.
@@ -119,9 +119,12 @@ async function openEditor(page: Page, s: EditorSelectors): Promise<void> {
 }
 
 async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Promise<void> {
-  // Click the Text tool → opens AddTextPresetPanel
-  await page.locator(s.textTool).click();
-  await page.waitForTimeout(500);
+  // Click the Text tool → opens AddTextPresetPanel. Use force:true because
+  // TikTok's Sidebar component can pass Playwright's "attached" check while
+  // React hasn't attached the click handler yet — the normal click then
+  // times out waiting for actionability. force:true fires the event directly.
+  await page.locator(s.textTool).first().click({ force: true, timeout: 5000 });
+  await page.waitForTimeout(800);
 
   // Click the first preset to add a text clip to the timeline. TikTok's
   // preset panel doesn't expose a single stable selector, so we try a
