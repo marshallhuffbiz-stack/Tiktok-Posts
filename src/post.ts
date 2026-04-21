@@ -2,8 +2,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openBrowser } from './lib/browser.js';
-import { pickRandomTopic } from './lib/topics.js';
-import { generateVideo } from './lib/rollSlides.js';
+import { generateBRoll, OverlayGenerationFailed, BRollApiError } from './lib/bRoll.js';
+import { applyCropAndOverlay, OverlayApplicationFailed, SelectorsNotConfigured } from './lib/overlay.js';
+import { is916 } from './lib/bRollParse.js';
 import {
   openUploadPage,
   attachVideo,
@@ -21,11 +22,9 @@ import { notify } from './lib/notify.js';
 import { acquireLock } from './lib/lockfile.js';
 import { spawnSync } from 'node:child_process';
 import type { Settings, RunEntry, ErrorType } from './lib/types.js';
-import { sanitizeVideo } from './lib/sanitizeVideo.js';
 
 const ROOT = process.cwd();
 const SETTINGS_PATH = path.join(ROOT, 'config', 'settings.json');
-const TOPICS_PATH = path.join(ROOT, 'config', 'topics.txt');
 const LOG_PATH = path.join(ROOT, 'logs', 'runs.jsonl');
 const LOCK_PATH = path.join(ROOT, '.post.lock');
 const DOWNLOADS_DIR = path.join(ROOT, 'downloads');
@@ -37,8 +36,11 @@ function rand(min: number, max: number): number { return min + Math.floor(Math.r
 function classify(err: unknown): ErrorType {
   if (err instanceof SessionExpiredError) return 'tiktok-session-expired';
   if (err instanceof PostFailedError) return 'tiktok-post-failed';
+  if (err instanceof OverlayGenerationFailed) return 'roll-slides-timeout';
+  if (err instanceof BRollApiError) return 'roll-slides-no-video';
+  if (err instanceof OverlayApplicationFailed) return 'tiktok-post-failed';
+  if (err instanceof SelectorsNotConfigured) return 'unknown-error';
   const msg = (err as Error)?.message ?? '';
-  if (/no topics/i.test(msg)) return 'unknown-error';
   if (/Generate.*timeout|waitForFunction.*timeout/i.test(msg)) return 'roll-slides-timeout';
   if (/unexpected video src/i.test(msg)) return 'roll-slides-no-video';
   if (/Uploaded.*timeout/i.test(msg)) return 'tiktok-upload-stuck';
@@ -99,24 +101,34 @@ async function main() {
   installDialogAutoAccept(browser.page);
 
   try {
-    const topic = pickRandomTopic(TOPICS_PATH);
-    entry.topic = topic;
-
-    // Roll slides
-    const rs = await generateVideo(browser.page, topic, settings, DOWNLOADS_DIR);
-    entry.slug = rs.slug;
-    entry.captionFirst80 = rs.caption.slice(0, 80);
-
-    // Re-encode with Apple HW encoder + iPhone metadata to mask the libx264/FFmpeg
-    // fingerprint TikTok uses to flag automated content.
-    const uploadPath = sanitizeVideo(rs.videoPath);
+    // Generate B-roll clip + overlay + caption from rent-roll-slides /api/broll.
+    // This replaces the old slide-generation path entirely. No topic is needed
+    // because the B-roll API picks a random clip + AI-generates text each call.
+    // NO SANITIZE: B-roll output is authentic stream-copied Mixkit bitstream.
+    // Re-encoding strips real camera metadata and REPLACES it with synthetic
+    // tells TikTok can still fingerprint. See memory:
+    //   project_sanitize_contraindicated_for_broll.md
+    const b = await generateBRoll(settings.bRoll, DOWNLOADS_DIR);
+    entry.slug = b.slug;
+    entry.captionFirst80 = b.caption.slice(0, 80);
+    console.log(`[bRoll] ${b.slug} · ${b.clipDurationSec.toFixed(1)}s · ${b.aspectRatio}`);
 
     // TikTok
     await openUploadPage(browser.page, settings);
     await sleep(rand(800, 2000));  // humanize: pause before attaching
-    await attachVideo(browser.page, uploadPath);
+    await attachVideo(browser.page, b.videoPath);
+    await sleep(rand(800, 2000));  // humanize: pause before entering editor
+
+    // Drive TikTok's native video editor to crop to 9:16 (when needed) and
+    // add a single text overlay spanning the full clip duration.
+    await applyCropAndOverlay(browser.page, {
+      overlayText: b.overlayText,
+      videoDurationSec: b.clipDurationSec,
+      needsCrop: !is916(b.aspectRatio),
+    });
     await sleep(rand(800, 2000));  // humanize: pause before captioning
-    await setCaption(browser.page, rs.caption);
+
+    await setCaption(browser.page, b.caption);
     await sleep(rand(500, 1500));
 
     if (settings.tiktok.clickFirstLocationChip) {
