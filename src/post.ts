@@ -2,9 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { openBrowser } from './lib/browser.js';
-import { generateBRoll, OverlayGenerationFailed, BRollApiError } from './lib/bRoll.js';
-import { applyCropAndOverlay, OverlayApplicationFailed, SelectorsNotConfigured } from './lib/overlay.js';
-import { is916 } from './lib/bRollParse.js';
+import { generateBRoll, OverlayGenerationFailed, BRollApiError, NoPortraitClipFound } from './lib/bRoll.js';
+import { applyOverlay, OverlayApplicationFailed, SelectorsNotConfigured } from './lib/overlay.js';
 import {
   openUploadPage,
   attachVideo,
@@ -37,6 +36,7 @@ function classify(err: unknown): ErrorType {
   if (err instanceof SessionExpiredError) return 'tiktok-session-expired';
   if (err instanceof PostFailedError) return 'tiktok-post-failed';
   if (err instanceof OverlayGenerationFailed) return 'roll-slides-timeout';
+  if (err instanceof NoPortraitClipFound) return 'roll-slides-timeout';
   if (err instanceof BRollApiError) return 'roll-slides-no-video';
   if (err instanceof OverlayApplicationFailed) return 'tiktok-post-failed';
   if (err instanceof SelectorsNotConfigured) return 'unknown-error';
@@ -121,10 +121,9 @@ async function main() {
 
     // Drive TikTok's native video editor to crop to 9:16 (when needed) and
     // add a single text overlay spanning the full clip duration.
-    await applyCropAndOverlay(browser.page, {
+    await applyOverlay(browser.page, {
       overlayText: b.overlayText,
       videoDurationSec: b.clipDurationSec,
-      needsCrop: !is916(b.aspectRatio),
     });
     await sleep(rand(800, 2000));  // humanize: pause before captioning
 

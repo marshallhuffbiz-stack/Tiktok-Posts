@@ -2,12 +2,8 @@
   "editorEntryButton": "CSS or Playwright locator that opens the editor from the upload page",
   "editorModalRoot": "root of the editor modal — used to wait for open/close",
 
-  "cropTool": "the Crop tool in the editor toolbar",
-  "cropAspect916": "the 9:16 option within the crop sub-menu",
-  "cropApply": "the Apply/Confirm button after selecting 9:16",
-
-  "textTool": "the Text tool in the editor toolbar",
-  "textInput": "the text input element that receives the overlay text",
+  "textTool": "the Text tool in the editor sidebar (button[data-button-name=\"text\"])",
+  "textInput": "the text input element that receives the overlay text (revealed after clicking a text preset)",
   "selectedTextClip": "the text clip on the timeline, used for span verification (look for data-duration)",
 
   "timelineRoot": "root of the timeline — used for handle-drag math",

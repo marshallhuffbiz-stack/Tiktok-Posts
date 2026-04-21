@@ -8,9 +8,6 @@ import { loadSelectors, SelectorsNotConfigured, type EditorSelectors } from '../
 const validSelectors: EditorSelectors = {
   editorEntryButton: 'button.enter-editor',
   editorModalRoot: '.editor-modal',
-  cropTool: '[data-tool="crop"]',
-  cropAspect916: '[data-aspect="9x16"]',
-  cropApply: 'button.crop-apply',
   textTool: '[data-tool="text"]',
   textInput: '.text-input',
   selectedTextClip: '.text-clip.selected',

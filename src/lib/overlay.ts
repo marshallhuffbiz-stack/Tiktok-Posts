@@ -1,8 +1,10 @@
 // src/lib/overlay.ts
 //
-// Drives TikTok Studio's in-browser video editor to crop the uploaded clip
-// to 9:16 (when needed) and add a single text overlay spanning the full
-// video duration.
+// Drives TikTok Studio's in-browser video editor to add a single text
+// overlay spanning the full video duration. No crop step: TikTok's web
+// editor exposes no crop tool, and local re-encoding would strip the
+// authentic camera fingerprint we care about. bRoll.ts filters for 9:16
+// at the source instead.
 //
 // This is the most fragile code in the project. TikTok's editor DOM is
 // undocumented and may change at any time. We follow these defensive
@@ -43,13 +45,6 @@ export interface EditorSelectors {
   editorEntryButton: string;
   /** Root element of the editor modal — used to wait for open/close */
   editorModalRoot: string;
-
-  /** Crop tool button inside the editor */
-  cropTool: string;
-  /** The 9:16 aspect option within the crop sub-menu */
-  cropAspect916: string;
-  /** Apply/Confirm button for the crop action */
-  cropApply: string;
 
   /** Text tool button inside the editor */
   textTool: string;
@@ -98,7 +93,6 @@ export function loadSelectors(filePath: string = resolveSelectorsPath()): Editor
 
   const required: (keyof EditorSelectors)[] = [
     'editorEntryButton', 'editorModalRoot',
-    'cropTool', 'cropAspect916', 'cropApply',
     'textTool', 'textInput', 'selectedTextClip',
     'timelineRoot', 'timelineHandle',
     'editorSaveButton',
@@ -114,14 +108,6 @@ export function loadSelectors(filePath: string = resolveSelectorsPath()): Editor
 async function openEditor(page: Page, s: EditorSelectors): Promise<void> {
   await page.locator(s.editorEntryButton).click();
   await page.locator(s.editorModalRoot).waitFor({ state: 'visible', timeout: DEFAULT_TIMEOUT_MS });
-}
-
-async function cropTo916(page: Page, s: EditorSelectors): Promise<void> {
-  await page.locator(s.cropTool).click();
-  await page.locator(s.cropAspect916).click();
-  await page.locator(s.cropApply).click();
-  // Wait for crop UI to close (aspect option becomes hidden)
-  await page.locator(s.cropAspect916).waitFor({ state: 'hidden', timeout: DEFAULT_TIMEOUT_MS });
 }
 
 async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Promise<void> {
@@ -243,29 +229,18 @@ async function saveEditor(page: Page, s: EditorSelectors): Promise<void> {
 }
 
 /**
- * Main export. Assumes a video has already been attached via the upload
- * page's file input. Opens the editor, optionally crops to 9:16, adds a
- * single text overlay spanning the full video, and closes the editor.
+ * Main export. Assumes a 9:16 video has already been attached via the
+ * upload page's file input (bRoll.ts enforces portrait). Opens the
+ * editor, adds a single text overlay spanning the full video, saves
+ * and closes the editor.
  */
-export async function applyCropAndOverlay(
+export async function applyOverlay(
   page: Page,
-  opts: { overlayText: string; videoDurationSec: number; needsCrop: boolean },
+  opts: { overlayText: string; videoDurationSec: number },
 ): Promise<void> {
   const s = loadSelectors();
 
   await openEditor(page, s);
-
-  if (opts.needsCrop) {
-    try {
-      await cropTo916(page, s);
-    } catch (err) {
-      // Crop failure is tolerable — we'd rather post a letterboxed video
-      // than abort. The native editor may auto-fit landscape into 9:16
-      // with black bars, which is still a valid post.
-      console.warn('[overlay] cropTo916 failed, continuing without crop:', (err as Error).message);
-    }
-  }
-
   await addTextOverlay(page, s, opts.overlayText);
   await extendOverlayToVideoEnd(page, s, opts.videoDurationSec);
   await saveEditor(page, s);

@@ -12,7 +12,7 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { parseAspectRatio } from './bRollParse.js';
+import { parseAspectRatio, is916 } from './bRollParse.js';
 import type { BRollResult, BRollSettings } from './types.js';
 
 const BROLL_API = 'https://rent-roll-slides.vercel.app/api/broll';
@@ -22,6 +22,14 @@ export class OverlayGenerationFailed extends Error {
   constructor(attempts: number) {
     super(`rent-roll-slides returned empty hook ${attempts} time(s)`);
     this.name = 'OverlayGenerationFailed';
+  }
+}
+
+/** Thrown when we exhausted retries looking for a portrait (9:16) clip */
+export class NoPortraitClipFound extends Error {
+  constructor(attempts: number, lastAspect: string) {
+    super(`no 9:16 clip after ${attempts} attempts (last: ${lastAspect})`);
+    this.name = 'NoPortraitClipFound';
   }
 }
 
@@ -164,8 +172,13 @@ export function buildCaption(hook: Hook): { caption: string; hashtags: string } 
  * Main export. Fetches one B-roll clip with overlay/caption text, writes
  * everything to disk, and returns paths + parsed fields.
  *
- * Retries up to settings.overlayRetries times if the server returns hook:
- * null (the AI call failed silently). Each retry is a fresh API call.
+ * Requires BOTH a populated hook AND a 9:16 portrait aspect ratio. We
+ * don't crop locally — re-encoding would strip the authentic camera
+ * fingerprint that's the whole point of stream-copy. Instead we re-roll
+ * the API call until we get a clip that's already 9:16.
+ *
+ * maxAttempts caps the total API calls (default: overlayRetries from
+ * settings, minimum 1). Each attempt is one API call.
  */
 export async function generateBRoll(
   settings: BRollSettings,
@@ -173,19 +186,26 @@ export async function generateBRoll(
 ): Promise<BRollResult> {
   const maxAttempts = Math.max(1, settings.overlayRetries);
   let lastResp: BRollResponse | null = null;
+  let lastAspect = '';
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const resp = await callApi(settings);
     lastResp = resp;
-    if (!settings.generateText) break; // caller doesn't want text; accept whatever
-    if (resp.hook) break;               // success — got a populated hook
-    // else: empty hook, try again
+    const aspect = parseAspectRatio(resp.processing);
+    lastAspect = aspect;
+    const hookOk = !settings.generateText || !!resp.hook;
+    const aspectOk = is916(aspect);
+    if (hookOk && aspectOk) break;
+    // otherwise continue — we'll discard this clip and try again
   }
 
   if (!lastResp) throw new BRollApiError('no response after retries'); // defensive
 
   if (settings.generateText && !lastResp.hook) {
     throw new OverlayGenerationFailed(maxAttempts);
+  }
+  if (!is916(lastAspect)) {
+    throw new NoPortraitClipFound(maxAttempts, lastAspect);
   }
 
   const slug = lastResp.sourceCategory || 'broll';
