@@ -108,6 +108,14 @@ export function loadSelectors(filePath: string = resolveSelectorsPath()): Editor
 async function openEditor(page: Page, s: EditorSelectors): Promise<void> {
   await page.locator(s.editorEntryButton).click();
   await page.locator(s.editorModalRoot).waitFor({ state: 'visible', timeout: DEFAULT_TIMEOUT_MS });
+  // Let the editor finish its mount animation + dismiss any first-run editor
+  // tour ("New features", "Got it", etc.) that might cover toolbar buttons.
+  await page.waitForTimeout(1200);
+  const popupLabels = ['Got it', 'Skip', 'Close', 'Dismiss', 'No thanks', 'Not now', 'Maybe later'];
+  for (const name of popupLabels) {
+    try { await page.getByRole('button', { name, exact: true }).first().click({ timeout: 800 }); } catch { /* no popup */ }
+  }
+  await page.keyboard.press('Escape').catch(() => {});
 }
 
 async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Promise<void> {
@@ -271,8 +279,30 @@ export async function applyOverlay(
 ): Promise<void> {
   const s = loadSelectors();
 
-  await openEditor(page, s);
-  await addTextOverlay(page, s, opts.overlayText);
-  await extendOverlayToVideoEnd(page, s, opts.videoDurationSec);
-  await saveEditor(page, s);
+  const dumpOnFailure = async (tag: string, err: Error): Promise<Error> => {
+    try {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const dir = '/tmp/tiktok-overlay-failures';
+      fs.mkdirSync(dir, { recursive: true });
+      const ts = Date.now();
+      await page.screenshot({ path: path.join(dir, `${ts}-${tag}.png`), fullPage: true });
+      const html = await page.content();
+      fs.writeFileSync(path.join(dir, `${ts}-${tag}.html`), html);
+      console.error(`[overlay] ${tag} failed; dumped to ${dir}/${ts}-${tag}.{png,html}`);
+    } catch { /* best-effort */ }
+    return err;
+  };
+
+  try { await openEditor(page, s); }
+  catch (e) { throw await dumpOnFailure('openEditor', e as Error); }
+
+  try { await addTextOverlay(page, s, opts.overlayText); }
+  catch (e) { throw await dumpOnFailure('addTextOverlay', e as Error); }
+
+  try { await extendOverlayToVideoEnd(page, s, opts.videoDurationSec); }
+  catch (e) { throw await dumpOnFailure('extendOverlayToVideoEnd', e as Error); }
+
+  try { await saveEditor(page, s); }
+  catch (e) { throw await dumpOnFailure('saveEditor', e as Error); }
 }
