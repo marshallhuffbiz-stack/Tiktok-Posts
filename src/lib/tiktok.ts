@@ -222,6 +222,20 @@ export async function clickPost(page: Page): Promise<void> {
 }
 
 /**
+ * Clicks "Save draft" instead of "Post". Useful for development and for
+ * review-before-publish flows. Draft lands in the Drafts tab; the user
+ * publishes it manually later.
+ */
+export async function clickSaveDraft(page: Page): Promise<void> {
+  const btn = page.locator('button[data-e2e="save_draft_button"]');
+  await btn.waitFor({ state: 'attached', timeout: 30_000 });
+  const isDisabled = await btn.isDisabled().catch(() => true);
+  if (isDisabled) throw new PostFailedError('Save draft button is disabled');
+  await btn.scrollIntoViewIfNeeded();
+  await btn.click({ timeout: 15_000 });
+}
+
+/**
  * Waits for evidence that the post succeeded.
  *
  * Locked from Task 11 spike: TikTok's success signal is a URL change from

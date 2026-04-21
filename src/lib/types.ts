@@ -33,6 +33,8 @@ export interface Settings {
     clickFirstLocationChip: boolean;
     aiGeneratedDisclosure: boolean;
     firstRunContentChecks: 'Cancel' | 'Turn on';
+    /** When true, click "Save draft" instead of "Post". Default: false. */
+    saveAsDraft?: boolean;
   };
   antiRepeat: {
     soundLastN: number;

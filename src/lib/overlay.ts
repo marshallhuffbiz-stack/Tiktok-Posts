@@ -177,6 +177,14 @@ async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Pro
   await input.waitFor({ state: 'visible', timeout: DEFAULT_TIMEOUT_MS });
   await input.click();
 
+  // TikTok's "Add text basic" seeds the contenteditable with a default
+  // placeholder (usually the word "Text"). Select-all + delete first so
+  // our content REPLACES it instead of appending.
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.waitForTimeout(50);
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(50);
+
   // Prefer execCommand('insertText') — single event, works for both <input>
   // and contenteditable. Fall back to char-by-char type if that fails.
   const inserted = await page.evaluate((t: string) => {

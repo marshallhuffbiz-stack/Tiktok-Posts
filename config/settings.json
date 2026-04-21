@@ -31,7 +31,8 @@
     "uploadUrl": "https://www.tiktok.com/tiktokstudio/upload",
     "clickFirstLocationChip": true,
     "aiGeneratedDisclosure": false,
-    "firstRunContentChecks": "Cancel"
+    "firstRunContentChecks": "Cancel",
+    "saveAsDraft": true
   },
   "antiRepeat": { "soundLastN": 8 },
   "retention": { "downloadsKeepDays": 7 }

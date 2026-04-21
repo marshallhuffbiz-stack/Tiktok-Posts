@@ -10,6 +10,7 @@ import {
   setCaption,
   setFirstLocationChip,
   clickPost,
+  clickSaveDraft,
   waitForPostSuccess,
   installDialogAutoAccept,
   SessionExpiredError,
@@ -152,6 +153,10 @@ async function main() {
       // confirmation UI because it's brittle and unnecessary — not clicking
       // Post is sufficient to ensure no post.
       entry.status = 'dry-run-success';
+    } else if (settings.tiktok.saveAsDraft) {
+      await clickSaveDraft(browser.page);
+      await waitForPostSuccess(browser.page);  // same URL-change signal
+      entry.status = 'success';
     } else {
       await clickPost(browser.page);
       await waitForPostSuccess(browser.page);
