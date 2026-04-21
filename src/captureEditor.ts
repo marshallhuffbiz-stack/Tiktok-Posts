@@ -138,6 +138,73 @@ async function main() {
 
     await browser.page.screenshot({ path: path.join(OUT_DIR, 'screenshot-4-editor-open.png'), fullPage: true });
 
+    // Crop is context-sensitive in TikTok's editor: it appears only after
+    // you click the video clip on the timeline. Try several selectors to
+    // locate a clip element, click it, wait for the properties panel to
+    // render, then dump that state.
+    try {
+      console.log('[capture] Clicking the video clip to reveal crop + properties...');
+      const clipCandidates = [
+        '[class*="Timeline"] [class*="clip" i]',
+        '[class*="TrackItem"]',
+        '[class*="ClipItem"]',
+        '[class*="Clip__"]',
+        '[class*="track" i] [draggable="true"]',
+        // Fallback: click the video preview itself
+        '.Editor__root video',
+        'video',
+      ];
+      let clipClicked = false;
+      for (const sel of clipCandidates) {
+        try {
+          const loc = browser.page.locator(sel).first();
+          const n = await loc.count();
+          if (n > 0) {
+            await loc.click({ timeout: 2000 });
+            console.log(`[capture]   clicked clip via ${sel}`);
+            clipClicked = true;
+            break;
+          }
+        } catch { /* try next */ }
+      }
+      if (!clipClicked) console.log('[capture]   no clip selector matched — you may need to click the clip manually');
+      await sleep(1500);
+      await browser.page.screenshot({ path: path.join(OUT_DIR, 'screenshot-4b-clip-selected.png'), fullPage: true });
+
+      // Dump interactive elements AGAIN now that crop tool should be visible
+      const interactiveAfterClipClick = await browser.page.evaluate(() => {
+        const buildSelector = (el: Element): string => {
+          if (el.id) return `#${el.id}`;
+          const e2e = el.getAttribute('data-e2e');
+          if (e2e) return `[data-e2e="${e2e}"]`;
+          const aria = el.getAttribute('aria-label');
+          if (aria) return `${el.tagName.toLowerCase()}[aria-label="${aria.replace(/"/g, '\\"')}"]`;
+          const className = (el.className || '').toString().split(/\s+/).filter(c => c && !/^[0-9]/.test(c))[0];
+          if (className) return `${el.tagName.toLowerCase()}.${className}`;
+          return el.tagName.toLowerCase();
+        };
+        const out: Array<{ tag: string; text: string; name: string; selector: string; dataAttrs: Record<string,string> }> = [];
+        for (const el of Array.from(document.querySelectorAll('button, input, [role="button"], [contenteditable="true"], textarea'))) {
+          const he = el as HTMLElement;
+          const rect = he.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) continue;
+          const dataAttrs: Record<string,string> = {};
+          for (const a of Array.from(he.attributes)) if (a.name.startsWith('data-')) dataAttrs[a.name] = a.value;
+          out.push({
+            tag: el.tagName.toLowerCase(),
+            text: (he.innerText || '').trim().slice(0, 80),
+            name: he.getAttribute('aria-label') || (he as HTMLInputElement).placeholder || '',
+            selector: buildSelector(el),
+            dataAttrs,
+          });
+        }
+        return out;
+      });
+      fs.writeFileSync(path.join(OUT_DIR, 'interactive-elements-after-clip-click.json'), JSON.stringify(interactiveAfterClipClick, null, 2));
+    } catch (e) {
+      console.warn('[capture]   clip-click drive failed:', (e as Error).message);
+    }
+
     // Try to drive one step deeper: click the Text tool, then the first preset,
     // so the dumped state includes the text input + timeline text clip.
     try {
