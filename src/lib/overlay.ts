@@ -119,21 +119,40 @@ async function openEditor(page: Page, s: EditorSelectors): Promise<void> {
 }
 
 async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Promise<void> {
-  // Click the Text tool → opens AddTextPresetPanel. Use force:true because
-  // TikTok's Sidebar component can pass Playwright's "attached" check while
-  // React hasn't attached the click handler yet — the normal click then
-  // times out waiting for actionability. force:true fires the event directly.
-  await page.locator(s.textTool).first().click({ force: true, timeout: 5000 });
-  await page.waitForTimeout(800);
+  // TikTok's Sidebar button sometimes doesn't respond to Playwright's synthetic
+  // clicks even with force:true. Dispatch a real click on the DOM node via JS
+  // AND invoke any React onClick via pointer events sequence. Then retry the
+  // panel-open check. Fail loudly if the panel never opens.
+  const panelOpened = await page.evaluate(async (sel) => {
+    const btn = document.querySelector(sel) as HTMLButtonElement | null;
+    if (!btn) return { opened: false, reason: 'button not found' };
+    // Fire pointerdown → mousedown → pointerup → mouseup → click in order
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+      btn.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+    }
+    // Also trigger native click (idempotent)
+    btn.click();
+    // Wait up to 3s for AddTextPresetPanel (or any visible Preset-class container) to appear
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      const presetPanel = document.querySelector('[class*="AddTextPreset"], [class*="TextPreset"]');
+      if (presetPanel) return { opened: true, panelClass: (presetPanel as HTMLElement).className };
+    }
+    return { opened: false, reason: 'panel did not appear within 3s of click' };
+  }, s.textTool);
 
-  // Click the first preset to add a text clip to the timeline. TikTok's
-  // preset panel doesn't expose a single stable selector, so we try a
-  // few heuristics. Any of them adding a text clip is enough.
+  if (!panelOpened.opened) {
+    throw new OverlayApplicationFailed(`Text tool click did not open preset panel: ${('reason' in panelOpened) ? panelOpened.reason : 'unknown'}`);
+  }
+  console.log(`[overlay] preset panel opened (${'panelClass' in panelOpened ? panelOpened.panelClass : ''})`);
+
+  // Click the first preset to add a text clip to the timeline.
   const presetTried: string[] = [];
   const presetCandidates = [
     '[class*="AddTextPreset"] [class*="item"]',
     '[class*="AddTextPreset"] button',
     '[class*="TextPreset"] [class*="item"]',
+    '[class*="AddTextPreset"] > div > div',
     '[class*="Preset"] button',
     '[class*="Preset"] [role="button"]',
   ];
@@ -143,7 +162,7 @@ async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Pro
     try {
       const loc = page.locator(sel).first();
       if (await loc.count().catch(() => 0) > 0) {
-        await loc.click({ timeout: 2000 });
+        await loc.click({ force: true, timeout: 3000 });
         presetClicked = true;
         break;
       }
