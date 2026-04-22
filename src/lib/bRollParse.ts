@@ -18,8 +18,17 @@ export function parseAspectRatio(text: string): string {
 }
 
 /**
- * Return true if the aspect ratio "WxH" is within 1% of 9:16 portrait.
- * Used to decide whether the TikTok editor's crop-to-9:16 step is needed.
+ * Return true if the aspect ratio "WxH" is portrait near 9:16 (within 8%).
+ *
+ * 8% tolerance accepts:
+ *   - exact 9:16 (1080x1920, 720x1280, 540x960)
+ *   - slightly taller-than-9:16 portraits (2160x4096, 9:17.4-ish)
+ *     which TikTok handles natively without distortion.
+ *
+ * It rejects:
+ *   - landscape (16:9 = 1.78 — way outside 0.5625 ± 0.045)
+ *   - square (1:1)
+ *   - non-portrait orientations
  */
 export function is916(aspectRatio: string): boolean {
   const [wStr, hStr] = aspectRatio.split('x');
@@ -28,5 +37,5 @@ export function is916(aspectRatio: string): boolean {
   if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return false;
   const target = 9 / 16;
   const actual = w / h;
-  return Math.abs(actual - target) / target < 0.01;
+  return Math.abs(actual - target) / target < 0.08;
 }
