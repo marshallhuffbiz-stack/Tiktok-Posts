@@ -303,12 +303,36 @@ export async function waitForPostSuccess(page: Page): Promise<void> {
  */
 export async function watchOwnPost(page: Page, durationSec: number): Promise<void> {
   try {
-    // The content list page loads — wait briefly for the first card
-    const firstCard = page.locator('a[href*="/tiktokstudio/analytics/"]').first();
-    await firstCard.waitFor({ state: 'visible', timeout: 15_000 });
-    await firstCard.click({ timeout: 10_000 });
+    // After clickPost, TikTok lands on /tiktokstudio/content but the new
+    // post takes 5-30s to materialize in the list (TikTok processes the
+    // upload async). Keep refreshing the page until a post link appears
+    // OR a tiktok.com/@user/video/ link appears in the page.
+    const cardSelectors = [
+      'a[href*="/tiktokstudio/analytics/"]',  // post analytics card
+      'a[href*="/video/"]',                    // direct video link
+      '[data-e2e*="post-item"] a',
+    ];
+    const deadlineMs = Date.now() + 60_000;
+    let card: import('patchright').Locator | null = null;
+    while (Date.now() < deadlineMs) {
+      for (const sel of cardSelectors) {
+        const loc = page.locator(sel).first();
+        const count = await loc.count().catch(() => 0);
+        if (count > 0) { card = loc; break; }
+      }
+      if (card) break;
+      // Refresh the content list every 5s
+      await page.waitForTimeout(5_000);
+      await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => { /* network blip OK */ });
+    }
+    if (!card) {
+      console.warn('[post] watchOwnPost: no post card appeared in 60s — skipping');
+      return;
+    }
+    await card.click({ timeout: 10_000 });
     // Let the video play; TikTok's analytics page auto-plays videos.
     const watchMs = Math.max(3_000, durationSec * 1000 + 2_000 + Math.floor(Math.random() * 3_000));
+    console.log(`[post] watching own post for ${(watchMs / 1000).toFixed(1)}s`);
     await page.waitForTimeout(watchMs);
   } catch (err) {
     console.warn('[post] watchOwnPost failed (non-fatal):', (err as Error).message);

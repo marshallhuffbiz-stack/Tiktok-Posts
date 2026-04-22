@@ -33,7 +33,7 @@
     "clickFirstLocationChip": false,
     "aiGeneratedDisclosure": false,
     "firstRunContentChecks": "Cancel",
-    "saveAsDraft": true,
+    "saveAsDraft": false,
     "locationMode": "skip"
   },
   "antiRepeat": { "soundLastN": 8 },
