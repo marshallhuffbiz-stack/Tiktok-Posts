@@ -139,20 +139,34 @@ async function main() {
     // Re-encoding strips real camera metadata and REPLACES it with synthetic
     // tells TikTok can still fingerprint. See memory:
     //   project_sanitize_contraindicated_for_broll.md
-    // Read the last 25 runs' templateIds so the API doesn't hand us the
-    // same hook template we just used. Prevents content homogeneity.
+    // Read recent runs to diversify inputs: avoid reusing recent templateIds,
+    // topics, audience, controversy. Prevents content homogeneity.
     const recentRuns = await readRecentRuns(LOG_PATH, 25);
     const recentTemplateIds = recentRuns
       .map(r => r.templateId)
       .filter((t): t is string => typeof t === 'string' && t.length > 0);
+    const recentTopics = recentRuns
+      .map(r => r.topic)
+      .filter((t): t is string => typeof t === 'string' && t.length > 0);
+    const recentAudience = recentRuns
+      .map(r => r.audience)
+      .filter((a): a is string => typeof a === 'string' && a.length > 0);
+    const recentControversy = recentRuns
+      .map(r => r.controversy)
+      .filter((c): c is number => typeof c === 'number');
 
-    const b = await generateBRoll(settings.bRoll, DOWNLOADS_DIR, recentTemplateIds);
+    const b = await generateBRoll(settings.bRoll, DOWNLOADS_DIR, recentTemplateIds, {
+      recentTopics, recentAudience, recentControversy,
+    });
     entry.slug = b.slug;
     entry.captionFirst80 = b.caption.slice(0, 80);
     entry.sourceUrl = b.sourceUrl;
     entry.aspectRatio = b.aspectRatio;
     entry.clipDurationSec = b.clipDurationSec;
     entry.templateId = b.templateId;
+    entry.topic = b.chosenTopic;
+    entry.audience = b.chosenAudience;
+    entry.controversy = b.chosenControversy;
     console.log(`[bRoll] ${b.slug} · ${b.clipDurationSec.toFixed(1)}s · ${b.aspectRatio} · tmpl=${b.templateId ?? '?'}`);
 
     // TikTok

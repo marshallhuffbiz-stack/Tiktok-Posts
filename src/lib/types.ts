@@ -89,6 +89,10 @@ export interface RunEntry {
   clipDurationSec?: number;
   /** Hook template_id from the B-roll API (e.g., "INV-012"). */
   templateId?: string;
+  /** Audience passed to the B-roll API for this run. */
+  audience?: string;
+  /** Controversy level passed to the B-roll API. */
+  controversy?: number;
   status: RunStatus;
   durationMs: number;
   errorType?: ErrorType;
@@ -116,6 +120,12 @@ export interface BRollResult {
   aspectRatio: string;     // "WxH" parsed from processing string
   sourceUrl?: string;      // Original Pexels CDN URL (videos.pexels.com/...)
   templateId?: string;     // hook.template_id from the B-roll API
+  /** The topic string we passed to the API for this generation. */
+  chosenTopic?: string;
+  /** The audience we passed to the API for this generation. */
+  chosenAudience?: string;
+  /** The controversy level we passed to the API. */
+  chosenControversy?: number;
 }
 
 export interface TikTokResult {

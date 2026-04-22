@@ -15,6 +15,7 @@ import path from 'node:path';
 import { parseAspectRatio, is916 } from './bRollParse.js';
 import { findHdVariant, downloadBytes, parsePexelsUrl } from './pexelsVariant.js';
 import { diversifyHashtags, rewriteCaptionOpener } from './contentVariety.js';
+import { pickTopic, pickAudienceControversy } from './brollVariety.js';
 import type { BRollResult, BRollSettings } from './types.js';
 
 const BROLL_API = 'https://rent-roll-slides.vercel.app/api/broll';
@@ -76,19 +77,25 @@ function audienceToApi(a: BRollSettings['audience']): string {
 
 /**
  * Post once to /api/broll and parse the response. Does not retry — callers
- * handle empty-hook retries.
+ * handle empty-hook retries. `overrides` lets the caller vary audience,
+ * controversy, and topic per run to force different hook templates.
  */
-async function callApi(settings: BRollSettings, recentHooks: string[] = []): Promise<BRollResponse> {
-  const body = {
+async function callApi(
+  settings: BRollSettings,
+  recentHooks: string[] = [],
+  overrides: { audience?: string; controversy?: number; topic?: string } = {},
+): Promise<BRollResponse> {
+  const body: Record<string, unknown> = {
     minDurationSec: settings.minSec,
     maxDurationSec: settings.maxSec,
-    audience: audienceToApi(settings.audience),
-    controversyLevel: settings.controversy,
+    audience: overrides.audience ?? audienceToApi(settings.audience),
+    controversyLevel: overrides.controversy ?? settings.controversy,
     useTrends: settings.pullTrending,
     generateHook: settings.generateText,
     cropTo916: settings.cropServerSide,
     recentHooks,
   };
+  if (overrides.topic) body.topic = overrides.topic;
 
   let res: Response;
   try {
@@ -210,15 +217,29 @@ export async function generateBRoll(
   settings: BRollSettings,
   outDir: string,
   recentHooks: string[] = [],
+  opts: {
+    recentTopics?: string[];
+    recentAudience?: string[];
+    recentControversy?: number[];
+  } = {},
 ): Promise<BRollResult> {
   const maxAttempts = Math.max(1, settings.overlayRetries);
   let lastResp: BRollResponse | null = null;
   let lastAspect = '';
 
+  // Pick fresh topic + audience/controversy per call (force template variety).
+  // Keep these stable across retries within a single generation so we don't
+  // jump categories mid-loop.
+  const chosenTopic = pickTopic(opts.recentTopics ?? []);
+  const { audience: chosenAudience, controversy: chosenControversy } =
+    pickAudienceControversy(opts.recentAudience ?? [], opts.recentControversy ?? []);
+  const overrides = { topic: chosenTopic, audience: chosenAudience, controversy: chosenControversy };
+  console.log(`[bRoll] inputs: topic="${chosenTopic}" audience=${chosenAudience} controversy=${chosenControversy}`);
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let resp: BRollResponse;
     try {
-      resp = await callApi(settings, recentHooks);
+      resp = await callApi(settings, recentHooks, overrides);
     } catch (err) {
       // Transient HTTP errors (500, 502, 503, fetch failures) — retry silently
       if (err instanceof BRollApiError && attempt < maxAttempts) {
@@ -276,5 +297,8 @@ export async function generateBRoll(
     aspectRatio,
     sourceUrl: lastResp.sourceUrl,
     templateId: hook.template_id,
+    chosenTopic,
+    chosenAudience,
+    chosenControversy,
   };
 }
