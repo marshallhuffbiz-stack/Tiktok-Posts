@@ -18,8 +18,8 @@
   },
   "bRoll": {
     "category": "Any (random)",
-    "minSec": 8,
-    "maxSec": 13,
+    "minSec": 12,
+    "maxSec": 18,
     "cropServerSide": false,
     "generateText": true,
     "audience": "both",

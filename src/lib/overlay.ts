@@ -204,33 +204,79 @@ async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Pro
 }
 
 /**
- * Read the selected text clip's rendered duration in seconds. TikTok's
- * timeline has no data-duration attribute; instead we compute it from the
- * ratio of the text clip's rendered width to the TimeRuler's rendered
- * width (the total-video axis), scaled by the known video duration.
+ * Read the selected text clip's rendered duration in seconds.
+ *
+ * The TimeRuler stretches to match the LONGEST clip on any track, so it's
+ * not a reliable seconds-per-pixel reference when the text clip is longer
+ * than the video. Instead we calibrate from the VIDEO clip itself: we know
+ * its duration (passed in) and its rendered width, so px-per-sec is
+ * videoClipWidth / videoDurationSec. Then text-clip-duration =
+ * textClipWidth / px-per-sec.
  */
 async function readOverlaySpanSec(
   page: Page, s: EditorSelectors, videoDurationSec: number,
 ): Promise<number> {
   return await page.evaluate(({ sel, videoSec }) => {
-    // Find the SELECTED text clip — it has TextClip__root inside a BaseClip
-    // that's marked isSelected-true. Otherwise fall back to the last TextClip.
-    const selectedBaseClip = document.querySelector(
-      '.BaseClip__root--isSelected-true'
-    ) as HTMLElement | null;
-    const textClipParent = selectedBaseClip
-      || document.querySelector(sel) as HTMLElement | null;
-    if (!textClipParent) return 0;
+    // Find the selected text clip
+    const textClipNode = document.querySelector(sel) as HTMLElement | null;
+    if (!textClipNode) return 0;
+    const textBaseClip = (textClipNode.closest('[data-mov-timeline-el-type="clip"]')
+      || textClipNode) as HTMLElement;
+    const textRect = textBaseClip.getBoundingClientRect();
 
-    const clipRect = textClipParent.getBoundingClientRect();
-    const ruler = document.querySelector('.TimeRuler__root') as HTMLElement | null;
-    if (!ruler) return 0;
-    const rulerRect = ruler.getBoundingClientRect();
-    if (rulerRect.width <= 0) return 0;
-
-    // Fraction of ruler the clip covers, then scale by videoSec.
-    return videoSec * (clipRect.width / rulerRect.width);
+    // Find the video clip — the BaseClip element that does NOT contain a TextClip
+    const allClips = Array.from(document.querySelectorAll('[data-mov-timeline-el-type="clip"]')) as HTMLElement[];
+    const videoClip = allClips.find(c => !c.querySelector('.TextClip__root'));
+    if (!videoClip) return 0;
+    const videoRect = videoClip.getBoundingClientRect();
+    if (videoRect.width <= 0 || videoSec <= 0) return 0;
+    const pxPerSec = videoRect.width / videoSec;
+    return textRect.width / pxPerSec;
   }, { sel: s.selectedTextClip, videoSec: videoDurationSec });
+}
+
+/**
+ * Get the X coordinates needed to drag the text clip's right trim handle
+ * so the clip aligns to the video clip's right edge.
+ */
+async function getDragTargets(page: Page, s: EditorSelectors): Promise<{
+  handleStartX: number; handleY: number; handleStartY: number;
+  videoClipRight: number; textClipRight: number;
+} | null> {
+  return await page.evaluate((sel) => {
+    const textClipNode = document.querySelector(sel) as HTMLElement | null;
+    if (!textClipNode) return null;
+    const textBaseClip = (textClipNode.closest('[data-mov-timeline-el-type="clip"]')
+      || textClipNode) as HTMLElement;
+    const textRect = textBaseClip.getBoundingClientRect();
+
+    const allClips = Array.from(document.querySelectorAll('[data-mov-timeline-el-type="clip"]')) as HTMLElement[];
+    const videoClip = allClips.find(c => !c.querySelector('.TextClip__root'));
+    if (!videoClip) return null;
+    const videoRect = videoClip.getBoundingClientRect();
+
+    // Find the right trim handle — the actual draggable element
+    const rightHandle = textBaseClip.querySelector(
+      '.BaseClip__rightTrimHandler, [class*="rightTrimHandler"]'
+    ) as HTMLElement | null;
+    let handleX: number; let handleY: number;
+    if (rightHandle) {
+      const hr = rightHandle.getBoundingClientRect();
+      handleX = hr.left + hr.width / 2;
+      handleY = hr.top + hr.height / 2;
+    } else {
+      // Fallback: drag from the visual right edge of the text clip
+      handleX = textRect.right - 2;
+      handleY = textRect.top + textRect.height / 2;
+    }
+    return {
+      handleStartX: handleX,
+      handleY,
+      handleStartY: handleY,
+      videoClipRight: videoRect.right,
+      textClipRight: textRect.right,
+    };
+  }, s.selectedTextClip);
 }
 
 async function verifySpan(
@@ -238,68 +284,52 @@ async function verifySpan(
 ): Promise<void> {
   const actual = await readOverlaySpanSec(page, s, videoDurationSec);
   const frac = spanFraction(actual, videoDurationSec);
-  if (frac < 0.9) {
+  // Accept anything between 90% and 110% of video duration
+  if (frac < 0.9 || frac > 1.1) {
     throw new OverlayApplicationFailed(
-      `overlay span ${actual.toFixed(2)}s is only ${(frac * 100).toFixed(0)}% of ${videoDurationSec.toFixed(2)}s video`,
+      `overlay span ${actual.toFixed(2)}s is ${(frac * 100).toFixed(0)}% of ${videoDurationSec.toFixed(2)}s video (need 90-110%)`,
     );
   }
+  console.log(`[overlay] span verified: ${actual.toFixed(1)}s (${(frac * 100).toFixed(0)}% of video)`);
 }
 
 async function extendOverlayToVideoEnd(
   page: Page, s: EditorSelectors, videoDurationSec: number,
 ): Promise<void> {
-  // Strategy 0: maybe it's already full span. TikTok's "Add text basic" adds
-  // a clip that spans the whole timeline by default — no drag needed.
+  // Already correct? Skip.
   try {
-    const existingSpan = await readOverlaySpanSec(page, s, videoDurationSec);
-    if (spanFraction(existingSpan, videoDurationSec) >= 0.9) {
-      console.log(`[overlay] text clip already full-span (${existingSpan.toFixed(1)}s of ${videoDurationSec.toFixed(1)}s)`);
+    const existing = await readOverlaySpanSec(page, s, videoDurationSec);
+    const frac = spanFraction(existing, videoDurationSec);
+    if (frac >= 0.9 && frac <= 1.1) {
+      console.log(`[overlay] text clip already matches video (${existing.toFixed(1)}s ≈ ${videoDurationSec.toFixed(1)}s)`);
       return;
     }
-  } catch { /* fall through to active strategies */ }
+    console.log(`[overlay] text clip is ${existing.toFixed(1)}s, video is ${videoDurationSec.toFixed(1)}s — dragging right handle`);
+  } catch { /* fall through */ }
 
-  // Strategy 1: numeric duration input (simplest and most reliable if present)
-  if (s.durationInput) {
-    const di = page.locator(s.durationInput);
-    if (await di.count().catch(() => 0) > 0) {
-      await di.fill(String(Math.round(videoDurationSec * 10) / 10));
-      await page.keyboard.press('Enter');
-      await verifySpan(page, s, videoDurationSec);
-      return;
-    }
-  }
+  // Drag the right trim handle so the text clip's right edge aligns with
+  // the video clip's right edge. We compute both X coordinates from the
+  // live DOM and drag in incremental steps to give TikTok's drag listener
+  // a chance to honor every intermediate position (otherwise the handle
+  // can "snap back" if we move too fast).
+  const targets = await getDragTargets(page, s);
+  if (!targets) throw new OverlayApplicationFailed('could not locate text clip + video clip for drag');
+  const deltaX = targets.videoClipRight - targets.textClipRight;
+  const targetHandleX = targets.handleStartX + deltaX;
 
-  // Strategy 2: drag the timeline handle
-  const handle = page.locator(s.timelineHandle).first();
-  const timeline = page.locator(s.timelineRoot).first();
-  const timelineBox = await timeline.boundingBox();
-  const handleBox = await handle.boundingBox();
-  if (timelineBox && handleBox) {
-    const targetX = timelineBox.x + computeHandleTargetX(
-      videoDurationSec, videoDurationSec, timelineBox.width,
-    );
-    const startX = handleBox.x + handleBox.width / 2;
-    const startY = handleBox.y + handleBox.height / 2;
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    // Multi-step move so TikTok's drag listeners receive intermediate events
-    await page.mouse.move(targetX, startY, { steps: 20 });
-    await page.mouse.up();
-    await verifySpan(page, s, videoDurationSec);
-    return;
-  }
+  await page.mouse.move(targets.handleStartX, targets.handleStartY);
+  await page.waitForTimeout(120);
+  await page.mouse.down();
+  // Multi-step move (drag): increase steps for longer drags
+  const distance = Math.abs(deltaX);
+  const steps = Math.max(20, Math.round(distance / 10));
+  await page.mouse.move(targetHandleX, targets.handleY, { steps });
+  await page.waitForTimeout(80);
+  await page.mouse.up();
+  await page.waitForTimeout(400);
 
-  // Strategy 3: fit-to-video affordance
-  if (s.fitToVideoButton) {
-    const fit = page.locator(s.fitToVideoButton);
-    if (await fit.count().catch(() => 0) > 0) {
-      await fit.click();
-      await verifySpan(page, s, videoDurationSec);
-      return;
-    }
-  }
-
-  throw new OverlayApplicationFailed('all 3 strategies for extending overlay failed');
+  // Verify span is now within tolerance of video duration
+  await verifySpan(page, s, videoDurationSec);
 }
 
 async function saveEditor(page: Page, s: EditorSelectors): Promise<void> {

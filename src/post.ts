@@ -73,11 +73,13 @@ function pruneOldDownloads(maxAgeDays: number): void {
 async function main() {
   const startTs = Date.now();
   const isDryRun = process.argv.includes('--dry-run');
+  const noJitter = process.argv.includes('--no-jitter');
 
   // Schedule jitter: sleep 0-10 minutes at fire time so the actual post timing
   // varies day-to-day. launchd fires at fixed minutes; the human-visible post
-  // time becomes randomized. Skip in dry-run mode for fast iteration.
-  if (!isDryRun) {
+  // time becomes randomized. Skip in dry-run AND --no-jitter modes (the
+  // latter is for batch draft generation where jitter only wastes time).
+  if (!isDryRun && !noJitter) {
     const jitterMs = Math.floor(Math.random() * 10 * 60 * 1000); // 0-600,000 ms
     console.log(`[jitter] sleeping ${Math.round(jitterMs / 1000)}s before posting`);
     await new Promise(resolve => setTimeout(resolve, jitterMs));
