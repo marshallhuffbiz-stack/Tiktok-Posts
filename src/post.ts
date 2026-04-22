@@ -83,8 +83,9 @@ async function main() {
   // CADENCE: optional skip + allowed-hours filter. Real users don't post
   // every single scheduled slot, every day, like clockwork. Even with
   // saveAsDraft mode this matters because TikTok still observes the
-  // upload-attempt timing pattern.
-  if (!isDryRun) {
+  // upload-attempt timing pattern. --no-jitter bypasses cadence too,
+  // so batch draft generation isn't blocked by hour-of-day windows.
+  if (!isDryRun && !noJitter) {
     const cadence = earlySettings.cadence ?? {};
     if (cadence.allowedHours && cadence.allowedHours.length > 0) {
       const hour = new Date().getHours();
