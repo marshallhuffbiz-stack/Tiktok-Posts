@@ -56,6 +56,7 @@ interface Hook {
 interface BRollResponse {
   success: boolean;
   mp4DataUrl: string;
+  /** Origin URL of the clip — verified to be from videos.pexels.com (not Mixkit, despite the rent-roll-slides UI text). */
   sourceUrl: string;
   sourceCategory: string;
   durationSec: number;
@@ -243,5 +244,6 @@ export async function generateBRoll(
     slug,
     clipDurationSec: lastResp.durationSec,
     aspectRatio,
+    sourceUrl: lastResp.sourceUrl,
   };
 }

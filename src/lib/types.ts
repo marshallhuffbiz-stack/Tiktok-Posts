@@ -66,6 +66,12 @@ export interface RunEntry {
   soundName?: string;
   soundFallback?: boolean;    // true if we used the "first For You" fallback
   location?: string;
+  /** Pexels source URL (or other origin) of the B-roll clip. */
+  sourceUrl?: string;
+  /** Aspect ratio of the source clip (e.g. "1080x1920"). */
+  aspectRatio?: string;
+  /** Duration of the source clip in seconds. */
+  clipDurationSec?: number;
   status: RunStatus;
   durationMs: number;
   errorType?: ErrorType;
@@ -82,7 +88,7 @@ export interface RollSlidesResult {
 }
 
 export interface BRollResult {
-  videoPath: string;       // raw Mixkit bitstream written to disk
+  videoPath: string;       // raw Pexels bitstream written to disk (stream-copied by rent-roll-slides; no re-encode)
   overlayPath: string;     // overlay.txt
   overlayText: string;     // loaded convenience copy
   captionPath: string;     // caption.txt
@@ -91,6 +97,7 @@ export interface BRollResult {
   slug: string;            // e.g. "garden", used in filenames — from sourceCategory
   clipDurationSec: number; // durationSec from API response
   aspectRatio: string;     // "WxH" parsed from processing string
+  sourceUrl?: string;      // Original Pexels CDN URL (videos.pexels.com/...)
 }
 
 export interface TikTokResult {

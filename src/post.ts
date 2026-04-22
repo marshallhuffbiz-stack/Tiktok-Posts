@@ -114,7 +114,10 @@ async function main() {
     const b = await generateBRoll(settings.bRoll, DOWNLOADS_DIR);
     entry.slug = b.slug;
     entry.captionFirst80 = b.caption.slice(0, 80);
-    console.log(`[bRoll] ${b.slug} · ${b.clipDurationSec.toFixed(1)}s · ${b.aspectRatio}`);
+    entry.sourceUrl = b.sourceUrl;
+    entry.aspectRatio = b.aspectRatio;
+    entry.clipDurationSec = b.clipDurationSec;
+    console.log(`[bRoll] ${b.slug} · ${b.clipDurationSec.toFixed(1)}s · ${b.aspectRatio} · ${b.sourceUrl}`);
 
     // TikTok
     await openUploadPage(browser.page, settings);
