@@ -26,18 +26,19 @@
     "audience": "both",
     "controversy": 3,
     "pullTrending": true,
-    "overlayRetries": 15
+    "overlayRetries": 15,
+    "voiceover": { "enabled": true, "rate": 175 }
   },
   "tiktok": {
     "uploadUrl": "https://www.tiktok.com/tiktokstudio/upload",
     "clickFirstLocationChip": false,
     "aiGeneratedDisclosure": false,
     "firstRunContentChecks": "Cancel",
-    "saveAsDraft": false,
+    "saveAsDraft": true,
     "locationMode": "skip"
   },
   "antiRepeat": { "soundLastN": 8 },
-  "retention": { "downloadsKeepDays": 7 },
+  "retention": { "downloadsKeepDays": 1 },
   "cadence": {
     "skipProbability": 0.15,
     "allowedHours": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]

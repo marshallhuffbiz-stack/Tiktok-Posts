@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "capture-editor": "tsc && node dist/captureEditor.js",
+    "warmup": "tsc && node dist/warmup.js",
     "inspect": "tsc && node dist/inspect.js",
     "login": "tsc && node dist/login.js",
     "logs": "tail -f logs/runs.jsonl | jq -c .",

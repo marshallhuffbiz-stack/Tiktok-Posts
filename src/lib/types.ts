@@ -10,6 +10,12 @@ export interface BRollSettings {
   controversy: 1 | 2 | 3 | 4 | 5;
   pullTrending: boolean;
   overlayRetries: number;
+  /** Optional: add a TTS voice-over track to the silent Pexels clip. */
+  voiceover?: {
+    enabled?: boolean;
+    voice?: string;     // macOS voice name; random pick if absent
+    rate?: number;      // words per minute, default 175
+  };
 }
 
 export interface Settings {

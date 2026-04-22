@@ -16,6 +16,7 @@ import { parseAspectRatio, is916 } from './bRollParse.js';
 import { findHdVariant, downloadBytes, parsePexelsUrl } from './pexelsVariant.js';
 import { diversifyHashtags, rewriteCaptionOpener } from './contentVariety.js';
 import { pickTopic, pickAudienceControversy } from './brollVariety.js';
+import { addVoiceover } from './voiceover.js';
 import type { BRollResult, BRollSettings } from './types.js';
 
 const BROLL_API = 'https://rent-roll-slides.vercel.app/api/broll';
@@ -272,11 +273,28 @@ export async function generateBRoll(
     console.log(`[bRoll] using Pexels HD variant: ${resolved.chosenUrl}`);
   }
   const videoFilename = await writeVideoToDisk(resolved.buffer, outDir, slug);
-  const videoPath = path.join(outDir, videoFilename);
+  let videoPath = path.join(outDir, videoFilename);
 
   const hook = lastResp.hook!;
   const overlayText = buildOverlayText(hook);
   const { caption, hashtags } = buildCaption(hook);
+
+  // Optional: add TTS voice-over (preserves Pexels h264 stream byte-for-byte;
+  // only encodes new AAC audio track). Falls back to silent original on
+  // any failure so we never block a post on TTS issues.
+  if (settings.voiceover?.enabled) {
+    try {
+      const voicedPath = addVoiceover(videoPath, overlayText, {
+        voice: settings.voiceover.voice,
+        rate: settings.voiceover.rate,
+      });
+      // Keep voiced as the upload target; remove silent original to save disk
+      try { fs.unlinkSync(videoPath); } catch { /* ignore */ }
+      videoPath = voicedPath;
+    } catch (err) {
+      console.warn('[voiceover] failed (using silent original):', (err as Error).message);
+    }
+  }
 
   const overlayPath = videoPath.replace(/\.mp4$/, '.overlay.txt');
   const captionPath = videoPath.replace(/\.mp4$/, '.caption.txt');
