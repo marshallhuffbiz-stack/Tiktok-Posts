@@ -13,6 +13,8 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { parseAspectRatio, is916 } from './bRollParse.js';
+import { findHdVariant, downloadBytes, parsePexelsUrl } from './pexelsVariant.js';
+import { diversifyHashtags, rewriteCaptionOpener } from './contentVariety.js';
 import type { BRollResult, BRollSettings } from './types.js';
 
 const BROLL_API = 'https://rent-roll-slides.vercel.app/api/broll';
@@ -76,7 +78,7 @@ function audienceToApi(a: BRollSettings['audience']): string {
  * Post once to /api/broll and parse the response. Does not retry — callers
  * handle empty-hook retries.
  */
-async function callApi(settings: BRollSettings): Promise<BRollResponse> {
+async function callApi(settings: BRollSettings, recentHooks: string[] = []): Promise<BRollResponse> {
   const body = {
     minDurationSec: settings.minSec,
     maxDurationSec: settings.maxSec,
@@ -85,7 +87,7 @@ async function callApi(settings: BRollSettings): Promise<BRollResponse> {
     useTrends: settings.pullTrending,
     generateHook: settings.generateText,
     cropTo916: settings.cropServerSide,
-    recentHooks: [],
+    recentHooks,
   };
 
   let res: Response;
@@ -119,23 +121,46 @@ async function callApi(settings: BRollSettings): Promise<BRollResponse> {
 }
 
 /**
- * Decode a data:video/mp4;base64,... URL to a file on disk.
- * Returns the filename (just the leaf, not the full path).
+ * Resolve the source bytes to use for the upload. If the API returned a
+ * UHD Pexels URL, try to fetch the matching HD variant directly from
+ * Pexels (smaller file, more "mobile-app-like" upload signature). On any
+ * failure, fall back to the UHD bytes already in the data URL.
+ *
+ * Returns { buffer, source } where `source` indicates which variant we used.
+ */
+async function resolveBytes(
+  dataUrl: string, sourceUrl: string,
+): Promise<{ buffer: Buffer; source: 'pexels-hd' | 'api-uhd'; chosenUrl: string }> {
+  const parsed = parsePexelsUrl(sourceUrl);
+  if (parsed && parsed.tier === 'uhd') {
+    try {
+      const hdUrl = await findHdVariant(sourceUrl);
+      if (hdUrl) {
+        const buf = await downloadBytes(hdUrl);
+        return { buffer: buf, source: 'pexels-hd', chosenUrl: hdUrl };
+      }
+    } catch {
+      // fall through to UHD data URL
+    }
+  }
+  // Fallback: decode the UHD data URL the API returned
+  const comma = dataUrl.indexOf(',');
+  if (comma < 0) throw new Error('resolveBytes: data URL missing comma');
+  const b64 = dataUrl.slice(comma + 1);
+  return { buffer: Buffer.from(b64, 'base64'), source: 'api-uhd', chosenUrl: sourceUrl };
+}
+
+/**
+ * Write video bytes to disk; returns the filename (not full path).
  */
 async function writeVideoToDisk(
-  dataUrl: string,
-  outDir: string,
-  slug: string,
+  buffer: Buffer, outDir: string, slug: string,
 ): Promise<string> {
   await fsp.mkdir(outDir, { recursive: true });
-  const comma = dataUrl.indexOf(',');
-  if (comma < 0) throw new Error('writeVideoToDisk: data URL missing comma');
-  const b64 = dataUrl.slice(comma + 1);
-  const buf = Buffer.from(b64, 'base64');
   const ts = Date.now();
   const safeSlug = (slug || 'broll').replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
   const filename = `${ts}-${safeSlug}.mp4`;
-  fs.writeFileSync(path.join(outDir, filename), buf);
+  fs.writeFileSync(path.join(outDir, filename), buffer);
   return filename;
 }
 
@@ -154,17 +179,17 @@ export function buildOverlayText(hook: Hook): string {
 }
 
 /**
- * Build the TikTok caption: caption body, then a blank line, then hashtags
- * space-separated.
+ * Build the TikTok caption: rewrite the body opener for variety, diversify
+ * the hashtag set against our pool (and drop over-used tags like #fyp),
+ * then compose "body\n\n#tags".
  *
  * Exported for unit testing.
  */
 export function buildCaption(hook: Hook): { caption: string; hashtags: string } {
-  const body = (hook.caption ?? '').trim();
-  const tags = (hook.hashtags ?? [])
-    .map(t => (t.startsWith('#') ? t : `#${t}`).trim())
-    .filter(t => t.length > 1)
-    .join(' ');
+  const rawBody = (hook.caption ?? '').trim();
+  const body = rewriteCaptionOpener(rawBody);
+  const diversified = diversifyHashtags(hook.hashtags ?? []);
+  const tags = diversified.join(' ');
   const caption = tags ? `${body}\n\n${tags}` : body;
   return { caption, hashtags: tags };
 }
@@ -184,6 +209,7 @@ export function buildCaption(hook: Hook): { caption: string; hashtags: string } 
 export async function generateBRoll(
   settings: BRollSettings,
   outDir: string,
+  recentHooks: string[] = [],
 ): Promise<BRollResult> {
   const maxAttempts = Math.max(1, settings.overlayRetries);
   let lastResp: BRollResponse | null = null;
@@ -192,7 +218,7 @@ export async function generateBRoll(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let resp: BRollResponse;
     try {
-      resp = await callApi(settings);
+      resp = await callApi(settings, recentHooks);
     } catch (err) {
       // Transient HTTP errors (500, 502, 503, fetch failures) — retry silently
       if (err instanceof BRollApiError && attempt < maxAttempts) {
@@ -220,7 +246,11 @@ export async function generateBRoll(
   }
 
   const slug = lastResp.sourceCategory || 'broll';
-  const videoFilename = await writeVideoToDisk(lastResp.mp4DataUrl, outDir, slug);
+  const resolved = await resolveBytes(lastResp.mp4DataUrl, lastResp.sourceUrl);
+  if (resolved.source === 'pexels-hd') {
+    console.log(`[bRoll] using Pexels HD variant: ${resolved.chosenUrl}`);
+  }
+  const videoFilename = await writeVideoToDisk(resolved.buffer, outDir, slug);
   const videoPath = path.join(outDir, videoFilename);
 
   const hook = lastResp.hook!;
@@ -245,5 +275,6 @@ export async function generateBRoll(
     clipDurationSec: lastResp.durationSec,
     aspectRatio,
     sourceUrl: lastResp.sourceUrl,
+    templateId: hook.template_id,
   };
 }

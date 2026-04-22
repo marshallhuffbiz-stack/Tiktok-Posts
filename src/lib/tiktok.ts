@@ -182,6 +182,46 @@ export async function setRandomLocationChip(page: Page): Promise<string | null> 
 export const setFirstLocationChip = setRandomLocationChip;
 
 /**
+ * Type a specific location into the location search box and click the
+ * first matching result. Used when locationMode === 'search'.
+ *
+ * Returns the location name chosen, or null if no match appeared.
+ */
+export async function setLocationBySearch(page: Page, query: string): Promise<string | null> {
+  const input = page.locator('input.Select__searchInput').first();
+  try {
+    await input.waitFor({ state: 'visible', timeout: 5000 });
+  } catch {
+    return null;  // search input not found — TikTok may hide it on some uploads
+  }
+  await input.click();
+  await input.fill('');
+  await input.type(query, { delay: 40 });
+  // Wait for a result dropdown item
+  await page.waitForTimeout(1200);
+  const firstResult = await page.evaluate(() => {
+    // Location results typically render as clickable rows in a list.
+    // Try several selector patterns since TikTok rearranges class names.
+    const candidates = [
+      '.poi-suggestion .suggest-item',
+      '[class*="PoiList"] [class*="item"]',
+      '[class*="location"] [role="option"]',
+      '[class*="Select__options"] [class*="item"]',
+    ];
+    for (const sel of candidates) {
+      const el = document.querySelector(sel) as HTMLElement | null;
+      if (el) {
+        const name = (el.textContent || '').trim();
+        el.click();
+        return name || '(unnamed)';
+      }
+    }
+    return null;
+  });
+  return firstResult;
+}
+
+/**
  * Clicks Discard, then confirms in the dialog. Used for --dry-run smoke tests.
  */
 export async function discardUpload(page: Page): Promise<void> {
@@ -248,6 +288,30 @@ export async function waitForPostSuccess(page: Page): Promise<void> {
     await page.waitForURL(/tiktokstudio\/content/, { timeout: 60_000 });
   } catch (err) {
     throw new PostFailedError(`URL did not change to /tiktokstudio/content within 60s (still at ${page.url()})`);
+  }
+}
+
+/**
+ * After a real post lands on /tiktokstudio/content, find the newest post
+ * card, click into its analytics page, and let the video play for at
+ * least `durationSec + 2`s (plus a small random extra). This creates the
+ * "creator watched their own post end-to-end" engagement signal that a
+ * manual-iPhone poster always generates but automation normally skips.
+ *
+ * Best-effort: any failure is logged and swallowed; we don't want the
+ * watch step to cause a run to fail after the post already succeeded.
+ */
+export async function watchOwnPost(page: Page, durationSec: number): Promise<void> {
+  try {
+    // The content list page loads — wait briefly for the first card
+    const firstCard = page.locator('a[href*="/tiktokstudio/analytics/"]').first();
+    await firstCard.waitFor({ state: 'visible', timeout: 15_000 });
+    await firstCard.click({ timeout: 10_000 });
+    // Let the video play; TikTok's analytics page auto-plays videos.
+    const watchMs = Math.max(3_000, durationSec * 1000 + 2_000 + Math.floor(Math.random() * 3_000));
+    await page.waitForTimeout(watchMs);
+  } catch (err) {
+    console.warn('[post] watchOwnPost failed (non-fatal):', (err as Error).message);
   }
 }
 

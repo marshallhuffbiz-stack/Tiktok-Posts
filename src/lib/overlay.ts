@@ -27,6 +27,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from 'patchright';
 import { computeHandleTargetX, spanFraction } from './overlayMath.js';
+import { humanMouseMove } from './humanMouse.js';
 
 export class OverlayApplicationFailed extends Error {
   constructor(msg: string) { super(`applyCropAndOverlay: ${msg}`); this.name = 'OverlayApplicationFailed'; }
@@ -111,13 +112,16 @@ async function openEditor(page: Page, s: EditorSelectors): Promise<void> {
   await btn.waitFor({ state: 'visible', timeout: 10_000 });
   const box = await btn.boundingBox();
   if (!box) throw new OverlayApplicationFailed('editor entry button has no bounding box');
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  // Move the cursor along a curved path from a "human-ish" starting point
+  // (mid-viewport) to the button. Real users don't teleport, and webmssdk.js
+  // observes pointer events.
+  const view = page.viewportSize() || { width: 1280, height: 800 };
+  await humanMouseMove(page, view.width / 2, view.height / 2, cx, cy);
   await page.waitForTimeout(150);
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.click(cx, cy);
   await page.locator(s.editorModalRoot).waitFor({ state: 'visible', timeout: DEFAULT_TIMEOUT_MS });
-  // Give the editor 2s to fully hydrate its React components before we try
-  // clicking toolbar buttons. React's onClick handlers only fire for trusted
-  // events targeting elements whose listeners have fully mounted.
   await page.waitForTimeout(2000);
 }
 
@@ -168,9 +172,38 @@ async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Pro
   }
   console.log('[overlay] AddTextPanel opened');
 
-  // Click the "Add text" basic button — this adds a plain text clip to the
-  // timeline without applying any preset effect.
-  await page.locator('[class*="AddTextPanel__addTextBasicButton"]').first().click({ timeout: 5000 });
+  // Pick a preset: usually a styled preset (colors/backgrounds/fonts) so
+  // each post has a different visual signature. Fall back to "Add text
+  // basic" if no preset items are available.
+  const pickedPreset = await page.evaluate(() => {
+    // Prefer preset items within the AddTextPanel; these each carry a
+    // pre-styled appearance (TikTok calls them TextPresets).
+    const panel = document.querySelector('[class*="AddTextPanel__root"]') as HTMLElement | null;
+    if (!panel) return { picked: 'none', count: 0 };
+    // Look for visually-distinct preset items. They're either <button>s or
+    // clickable <div>s with "item"/"preset" in their class.
+    const presetSel = '[class*="TextPreset"], [class*="preset" i] [role="button"], [class*="Preset"] button, [class*="sectionWrapper"] [class*="item"]';
+    const presets = Array.from(panel.querySelectorAll(presetSel)) as HTMLElement[];
+    const visible = presets.filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 10 && r.height > 10;
+    });
+    if (visible.length === 0) {
+      // Fall back to Add text basic button
+      const basic = panel.querySelector('[class*="addTextBasicButton"]') as HTMLElement | null;
+      if (basic) { basic.click(); return { picked: 'basic', count: 0 }; }
+      return { picked: 'none', count: 0 };
+    }
+    // Random pick among visible presets, 70% of the time. 30% use basic.
+    if (Math.random() < 0.3) {
+      const basic = panel.querySelector('[class*="addTextBasicButton"]') as HTMLElement | null;
+      if (basic) { basic.click(); return { picked: 'basic', count: visible.length }; }
+    }
+    const idx = Math.floor(Math.random() * visible.length);
+    visible[idx]!.click();
+    return { picked: `preset[${idx}]`, count: visible.length };
+  });
+  console.log(`[overlay] text style: ${pickedPreset.picked} (${pickedPreset.count} presets seen)`);
 
   // Text input / contenteditable should now be focused
   const input = page.locator(s.textInput).first();
@@ -317,10 +350,20 @@ async function extendOverlayToVideoEnd(
   const deltaX = targets.videoClipRight - targets.textClipRight;
   const targetHandleX = targets.handleStartX + deltaX;
 
-  await page.mouse.move(targets.handleStartX, targets.handleStartY);
+  // First, curve the cursor to the handle from wherever it is now (mid-viewport
+  // is a reasonable estimate after the previous text-input click). Real users
+  // don't teleport their hand to the timeline handle.
+  const view = page.viewportSize() || { width: 1280, height: 800 };
+  await humanMouseMove(
+    page, view.width / 2, view.height / 2,
+    targets.handleStartX, targets.handleStartY,
+    { steps: 20 },
+  );
   await page.waitForTimeout(120);
   await page.mouse.down();
-  // Multi-step move (drag): increase steps for longer drags
+  // The drag itself: multi-step but we still use the straight mouse.move with
+  // steps because TikTok's drag listener wants monotonic-x events. A curved
+  // drag would confuse the trim-handle math.
   const distance = Math.abs(deltaX);
   const steps = Math.max(20, Math.round(distance / 10));
   await page.mouse.move(targetHandleX, targets.handleY, { steps });

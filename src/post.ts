@@ -9,9 +9,11 @@ import {
   attachVideo,
   setCaption,
   setFirstLocationChip,
+  setLocationBySearch,
   clickPost,
   clickSaveDraft,
   waitForPostSuccess,
+  watchOwnPost,
   installDialogAutoAccept,
   SessionExpiredError,
   PostFailedError,
@@ -75,6 +77,31 @@ async function main() {
   const isDryRun = process.argv.includes('--dry-run');
   const noJitter = process.argv.includes('--no-jitter');
 
+  // Pre-flight settings load (we need cadence config before we sleep)
+  const earlySettings = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')) as Settings;
+
+  // CADENCE: optional skip + allowed-hours filter. Real users don't post
+  // every single scheduled slot, every day, like clockwork. Even with
+  // saveAsDraft mode this matters because TikTok still observes the
+  // upload-attempt timing pattern.
+  if (!isDryRun) {
+    const cadence = earlySettings.cadence ?? {};
+    if (cadence.allowedHours && cadence.allowedHours.length > 0) {
+      const hour = new Date().getHours();
+      if (!cadence.allowedHours.includes(hour)) {
+        console.log(`[cadence] skip: current hour ${hour} not in allowedHours [${cadence.allowedHours.join(',')}]`);
+        process.exit(0);
+      }
+    }
+    if (cadence.skipProbability && cadence.skipProbability > 0) {
+      const roll = Math.random();
+      if (roll < cadence.skipProbability) {
+        console.log(`[cadence] skip: rolled ${roll.toFixed(2)} < skipProbability ${cadence.skipProbability}`);
+        process.exit(0);
+      }
+    }
+  }
+
   // Schedule jitter: sleep 0-10 minutes at fire time so the actual post timing
   // varies day-to-day. launchd fires at fixed minutes; the human-visible post
   // time becomes randomized. Skip in dry-run AND --no-jitter modes (the
@@ -90,7 +117,7 @@ async function main() {
     await notify('TikTok Schedule', 'browser-data/ missing — run `npm run login`', 'Basso');
     process.exit(1);
   }
-  const settings = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')) as Settings;
+  const settings = earlySettings;
   const lock = await acquireLock(LOCK_PATH).catch(async err => {
     console.error(err.message);
     process.exit(1);
@@ -111,13 +138,21 @@ async function main() {
     // Re-encoding strips real camera metadata and REPLACES it with synthetic
     // tells TikTok can still fingerprint. See memory:
     //   project_sanitize_contraindicated_for_broll.md
-    const b = await generateBRoll(settings.bRoll, DOWNLOADS_DIR);
+    // Read the last 25 runs' templateIds so the API doesn't hand us the
+    // same hook template we just used. Prevents content homogeneity.
+    const recentRuns = await readRecentRuns(LOG_PATH, 25);
+    const recentTemplateIds = recentRuns
+      .map(r => r.templateId)
+      .filter((t): t is string => typeof t === 'string' && t.length > 0);
+
+    const b = await generateBRoll(settings.bRoll, DOWNLOADS_DIR, recentTemplateIds);
     entry.slug = b.slug;
     entry.captionFirst80 = b.caption.slice(0, 80);
     entry.sourceUrl = b.sourceUrl;
     entry.aspectRatio = b.aspectRatio;
     entry.clipDurationSec = b.clipDurationSec;
-    console.log(`[bRoll] ${b.slug} · ${b.clipDurationSec.toFixed(1)}s · ${b.aspectRatio} · ${b.sourceUrl}`);
+    entry.templateId = b.templateId;
+    console.log(`[bRoll] ${b.slug} · ${b.clipDurationSec.toFixed(1)}s · ${b.aspectRatio} · tmpl=${b.templateId ?? '?'}`);
 
     // TikTok
     await openUploadPage(browser.page, settings);
@@ -136,9 +171,19 @@ async function main() {
     await setCaption(browser.page, b.caption);
     await sleep(rand(500, 1500));
 
-    if (settings.tiktok.clickFirstLocationChip) {
+    // Location: skip / random-chip / search, per settings. The legacy
+    // clickFirstLocationChip bool only still applies when locationMode is
+    // unset (default behavior preserved for existing configs).
+    const locMode = settings.tiktok.locationMode
+      ?? (settings.tiktok.clickFirstLocationChip ? 'random-chip' : 'skip');
+    if (locMode === 'random-chip') {
       const loc = await setFirstLocationChip(browser.page);
       if (loc) entry.location = loc;
+    } else if (locMode === 'search' && settings.tiktok.locationSearch) {
+      const loc = await setLocationBySearch(browser.page, settings.tiktok.locationSearch);
+      if (loc) entry.location = loc;
+    } else {
+      console.log('[location] skipping location field (locationMode=skip)');
     }
     await sleep(rand(500, 1500));
 
@@ -166,6 +211,9 @@ async function main() {
       await clickPost(browser.page);
       await waitForPostSuccess(browser.page);
       entry.status = 'success';
+      // Only on real posts: create the "creator watched own post" engagement
+      // signal. Drafts have no published URL yet, so this is skipped there.
+      await watchOwnPost(browser.page, b.clipDurationSec);
     }
   } catch (err) {
     const errorType = classify(err);

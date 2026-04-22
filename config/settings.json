@@ -30,11 +30,16 @@
   },
   "tiktok": {
     "uploadUrl": "https://www.tiktok.com/tiktokstudio/upload",
-    "clickFirstLocationChip": true,
+    "clickFirstLocationChip": false,
     "aiGeneratedDisclosure": false,
     "firstRunContentChecks": "Cancel",
-    "saveAsDraft": true
+    "saveAsDraft": true,
+    "locationMode": "skip"
   },
   "antiRepeat": { "soundLastN": 8 },
-  "retention": { "downloadsKeepDays": 7 }
+  "retention": { "downloadsKeepDays": 7 },
+  "cadence": {
+    "skipProbability": 0.15,
+    "allowedHours": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+  }
 }

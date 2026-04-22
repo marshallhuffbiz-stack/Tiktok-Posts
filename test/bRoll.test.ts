@@ -38,28 +38,33 @@ test('buildOverlayText skips empty lines', () => {
   assert.equal(result, "A\nB\n\nIt's called the BRRRR method.");
 });
 
-test('buildCaption joins body and hashtags with blank line', () => {
+test('buildCaption keeps first 3 api tags and drops #fyp (diversified)', () => {
   const { caption, hashtags } = buildCaption(sampleHook);
-  assert.equal(hashtags, '#realestate #investing #BRRRR #rentalproperty #moneytok #fyp');
-  assert.ok(caption.startsWith('Most people only see'));
-  assert.ok(caption.endsWith('#fyp'));
-  assert.ok(caption.includes('\n\n#realestate'));
+  const tagList = hashtags.split(' ');
+  assert.equal(tagList.length, 5);
+  assert.equal(tagList[0], '#realestate');
+  assert.equal(tagList[1], '#investing');
+  assert.equal(tagList[2], '#BRRRR');
+  assert.ok(!tagList.some(t => t.toLowerCase() === '#fyp'));
+  assert.ok(caption.includes('\n\n#'));
 });
 
-test('buildCaption handles hashtags without # prefix', () => {
-  const { caption, hashtags } = buildCaption({ ...sampleHook, hashtags: ['fyp', '#already', 'thrid'] });
-  assert.equal(hashtags, '#fyp #already #thrid');
-  assert.ok(caption.endsWith('#thrid'));
+test('buildCaption normalizes missing # prefix on api tags', () => {
+  const { hashtags } = buildCaption({ ...sampleHook, hashtags: ['realestate', '#investing', 'BRRRR'] });
+  const tagList = hashtags.split(' ');
+  for (const t of tagList) assert.ok(t.startsWith('#'), `${t} missing #`);
 });
 
-test('buildCaption handles no hashtags', () => {
+test('buildCaption fills from pool when api has no hashtags', () => {
   const { caption, hashtags } = buildCaption({ ...sampleHook, hashtags: [] });
-  assert.equal(hashtags, '');
-  assert.equal(caption, sampleHook.caption);
-  assert.ok(!caption.includes('\n\n'));
+  const tagList = hashtags.split(' ');
+  assert.equal(tagList.length, 5);
+  assert.ok(caption.includes('\n\n#'));
 });
 
-test('buildCaption handles empty caption body', () => {
-  const { caption } = buildCaption({ ...sampleHook, caption: '' });
-  assert.equal(caption, '\n\n#realestate #investing #BRRRR #rentalproperty #moneytok #fyp');
+test('buildCaption works with empty caption body (just hashtags)', () => {
+  const { caption, hashtags } = buildCaption({ ...sampleHook, caption: '' });
+  const tagList = hashtags.split(' ');
+  assert.equal(tagList.length, 5);
+  assert.ok(caption.startsWith('\n\n#'));
 });

@@ -35,12 +35,27 @@ export interface Settings {
     firstRunContentChecks: 'Cancel' | 'Turn on';
     /** When true, click "Save draft" instead of "Post". Default: false. */
     saveAsDraft?: boolean;
+    /** How to handle the location field.
+     *  'skip' = don't touch it (recommended — random locations look bot-like)
+     *  'random-chip' = old behavior: pick a random chip from TikTok's suggestions
+     *  'search' = type the value of locationSearch into the location search box
+     */
+    locationMode?: 'skip' | 'random-chip' | 'search';
+    /** Location name to type in the search box when locationMode='search'. */
+    locationSearch?: string;
   };
   antiRepeat: {
     soundLastN: number;
   };
   retention: {
     downloadsKeepDays: number;
+  };
+  /** Optional posting cadence controls. */
+  cadence?: {
+    /** Probability (0-1) of skipping this slot when post.ts fires. Default: 0 (never skip). */
+    skipProbability?: number;
+    /** Hours of the day in which posts are allowed (0-23). Empty = all hours. */
+    allowedHours?: number[];
   };
 }
 
@@ -72,6 +87,8 @@ export interface RunEntry {
   aspectRatio?: string;
   /** Duration of the source clip in seconds. */
   clipDurationSec?: number;
+  /** Hook template_id from the B-roll API (e.g., "INV-012"). */
+  templateId?: string;
   status: RunStatus;
   durationMs: number;
   errorType?: ErrorType;
@@ -98,6 +115,7 @@ export interface BRollResult {
   clipDurationSec: number; // durationSec from API response
   aspectRatio: string;     // "WxH" parsed from processing string
   sourceUrl?: string;      // Original Pexels CDN URL (videos.pexels.com/...)
+  templateId?: string;     // hook.template_id from the B-roll API
 }
 
 export interface TikTokResult {
