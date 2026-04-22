@@ -2,11 +2,11 @@
 
 ## TL;DR — read this when you wake up
 
-1. **10+ drafts are in `tiktok.com/tiktokstudio/content/drafts`.** Review them — text duration now matches video length (no more 32s text on 11s video).
+1. **10 drafts are in `tiktok.com/tiktokstudio/content/drafts`** — review and publish on your schedule. Slugs: window, roof, real-estate, aerial (×2), suburb, office, bathroom, builder, concrete. All have correct text duration (no more 32s text on a 12s video). Sounds and locations are varied across drafts.
 2. **Daily schedule reduced from 10 → 3 posts.** Old config was textbook spam-flag for a 2-follower account; new times are 11:47, 16:23, 19:38 Eastern.
-3. **Video clips bumped from 8-13s → 12-18s.** This is the 2026 viral sweet spot per Buffer / Sprout Social research; old 8s clips were too short for hook + content.
-4. **Save-as-draft is on by default** (`config/settings.json` → `tiktok.saveAsDraft: true`). Drafts are not visible to the public; you publish manually. Flip to `false` when you're ready to fully automate.
-5. The duration bug fix is committed and verified live (5s default → dragged to 17.5s on a 17.5s video).
+3. **Video clips bumped from 8-13s → 12-18s.** 2026 viral sweet spot per Buffer / Sprout Social research; old 8s clips were too short for hook + content.
+4. **Save-as-draft is on by default** (`config/settings.json` → `tiktok.saveAsDraft: true`). Flip to `false` when ready to fully automate; then run `npm run schedule` to install launchd.
+5. **Duration bug fix is committed and verified.** 5s default → dragged to match video duration. New `is916` aspect tolerance loosened to 8% so taller-than-9:16 portraits aren't rejected (one draft attempt failed before this fix).
 
 If anything looks weird in the drafts, paste a screenshot and I'll patch.
 
