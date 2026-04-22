@@ -1,5 +1,19 @@
 # Overnight changes — 2026-04-22
 
+## TL;DR — read this when you wake up
+
+1. **10+ drafts are in `tiktok.com/tiktokstudio/content/drafts`.** Review them — text duration now matches video length (no more 32s text on 11s video).
+2. **Daily schedule reduced from 10 → 3 posts.** Old config was textbook spam-flag for a 2-follower account; new times are 11:47, 16:23, 19:38 Eastern.
+3. **Video clips bumped from 8-13s → 12-18s.** This is the 2026 viral sweet spot per Buffer / Sprout Social research; old 8s clips were too short for hook + content.
+4. **Save-as-draft is on by default** (`config/settings.json` → `tiktok.saveAsDraft: true`). Drafts are not visible to the public; you publish manually. Flip to `false` when you're ready to fully automate.
+5. The duration bug fix is committed and verified live (5s default → dragged to 17.5s on a 17.5s video).
+
+If anything looks weird in the drafts, paste a screenshot and I'll patch.
+
+---
+
+## What I was asked to do
+
 User asked me to fix the text-duration bug, research current TikTok detection + ranking, apply findings, and generate ≥10 drafts before morning. They went to bed; full autonomy.
 
 ## What was broken
