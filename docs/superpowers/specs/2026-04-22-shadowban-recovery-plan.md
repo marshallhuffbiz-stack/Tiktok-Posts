@@ -22,6 +22,13 @@ The 81-post number is the smoking gun. Posting that volume with literally zero e
 
 ## What I did during the 2-hour window
 
+### 0. Verified all the new pieces actually work end-to-end
+
+- Warmup smoke-tested for 2 minutes: watched 5 videos, liked 1, no errors
+- Voiceover dry-run produced an 11MB voiced.mp4 with both video + audio streams (Pexels h264 untouched, AAC voice-track muxed in)
+- Voiceover live test saved a draft titled "Tenant screening is deal math in disguise..." — visible in your `tiktok.com/tiktokstudio/content?tab=draft` page (Drafts 10)
+- 86 unit tests pass, tsc clean
+
 ### 1. Stopped the loop after 8 of 10 live posts
 
 Posts #1-8 from the live loop went up successfully. I stopped the loop because each new 0-view post deepens the hole. Tally: 8 success, 1 fail (disk space), then I aborted #9-10. They're all on the account now adding to the 81.
@@ -58,15 +65,22 @@ Smoke-tested for 2 minutes: watched 5 videos, liked 1. Works.
 
 2. **Don't delete the existing posts yet.** Mass deletion is itself a flag. Leave them.
 
-3. **Run warmup daily, multiple times.** Set up a launchd schedule:
+3. **Install the warmup schedule.** One command:
    ```bash
-   # 3 sessions/day, 20 min each, scattered hours
-   # Add to a new launchd plist or just run manually:
-   npm run warmup -- --minutes=20 --tab=fyp
-   npm run warmup -- --minutes=15 --search=real estate investing
-   npm run warmup -- --minutes=15 --tab=following
+   ./scripts/install-warmup-schedule.sh
+   ```
+   This installs a launchd job that runs `npm run warmup -- --minutes=20` automatically at **10:23am, 2:47pm, and 8:11pm** every day. Logs go to `logs/warmup-launchd.log`.
+
+   You can also run it manually any time:
+   ```bash
+   npm run warmup                      # 20 min FYP
+   npm run warmup -- --minutes=30
+   npm run warmup -- --tab=following
+   npm run warmup -- --search="real estate investing"
    ```
    Goal: build "active user, browses + likes + watches, doesn't post" signal for 7-14 days.
+
+   To remove the schedule: `./scripts/install-warmup-schedule.sh remove`
 
 4. **Use TikTok on your iPhone the way a real human does.** Open it 5-10 times a day for 2-5 minutes. Like things. Comment. Follow people. **Do not post from the phone either**, just engage. The mobile app sends the strongest "trusted user" signals.
 
@@ -103,10 +117,28 @@ Options ranked by cost/effort:
 | File | Purpose |
 |---|---|
 | `src/warmup.ts` (new) | Account warmup automation |
+| `src/lib/voiceover.ts` (new) | TTS voice-over module (preserves Pexels h264) |
+| `test/voiceover.test.ts` (new) | Unit tests for speakableText |
+| `scripts/install-warmup-schedule.sh` (new) | One-command launchd installer for warmup |
+| `src/lib/bRoll.ts` | Wires voiceover into the generation pipeline |
+| `src/lib/types.ts` | Added `bRoll.voiceover` settings |
 | `package.json` | Added `npm run warmup` script |
-| `config/settings.json` | `saveAsDraft: true` re-enabled (safe mode) |
+| `config/settings.json` | `saveAsDraft: true` (safe mode), `voiceover.enabled: true` |
 
 All committed.
+
+## Voiceover (new option in your toolbox)
+
+When you re-enter posting after the recovery pause, voiced videos give:
+
+- An **audio track** that the algorithm prioritises over silent video
+- A **5-voice rotation** (Samantha / Alex / Karen / Daniel / Ava) so the same TTS doesn't appear on every post
+- **Currency normalisation** ("$118k" → "118 thousand") so numbers read naturally
+- The Pexels video bitstream stays **byte-for-byte identical** (only audio is freshly encoded as AAC)
+
+To toggle: `config/settings.json` → `bRoll.voiceover.enabled` (currently `true`). Set to `false` to revert to silent uploads.
+
+Tested: produced a draft titled "Tenant screening is deal math in disguise..." in your Drafts tab, with audio narration. Open it in Edit mode to play and hear the voice.
 
 ## TL;DR if you read nothing else
 
