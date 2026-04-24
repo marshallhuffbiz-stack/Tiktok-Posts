@@ -172,38 +172,11 @@ async function addTextOverlay(page: Page, s: EditorSelectors, text: string): Pro
   }
   console.log('[overlay] AddTextPanel opened');
 
-  // Pick a preset: usually a styled preset (colors/backgrounds/fonts) so
-  // each post has a different visual signature. Fall back to "Add text
-  // basic" if no preset items are available.
-  const pickedPreset = await page.evaluate(() => {
-    // Prefer preset items within the AddTextPanel; these each carry a
-    // pre-styled appearance (TikTok calls them TextPresets).
-    const panel = document.querySelector('[class*="AddTextPanel__root"]') as HTMLElement | null;
-    if (!panel) return { picked: 'none', count: 0 };
-    // Look for visually-distinct preset items. They're either <button>s or
-    // clickable <div>s with "item"/"preset" in their class.
-    const presetSel = '[class*="TextPreset"], [class*="preset" i] [role="button"], [class*="Preset"] button, [class*="sectionWrapper"] [class*="item"]';
-    const presets = Array.from(panel.querySelectorAll(presetSel)) as HTMLElement[];
-    const visible = presets.filter(el => {
-      const r = el.getBoundingClientRect();
-      return r.width > 10 && r.height > 10;
-    });
-    if (visible.length === 0) {
-      // Fall back to Add text basic button
-      const basic = panel.querySelector('[class*="addTextBasicButton"]') as HTMLElement | null;
-      if (basic) { basic.click(); return { picked: 'basic', count: 0 }; }
-      return { picked: 'none', count: 0 };
-    }
-    // Random pick among visible presets, 70% of the time. 30% use basic.
-    if (Math.random() < 0.3) {
-      const basic = panel.querySelector('[class*="addTextBasicButton"]') as HTMLElement | null;
-      if (basic) { basic.click(); return { picked: 'basic', count: visible.length }; }
-    }
-    const idx = Math.floor(Math.random() * visible.length);
-    visible[idx]!.click();
-    return { picked: `preset[${idx}]`, count: visible.length };
-  });
-  console.log(`[overlay] text style: ${pickedPreset.picked} (${pickedPreset.count} presets seen)`);
+  // Click the "Add text" basic button. Preset tiles in the panel only set
+  // a style preview; they don't add a clip. To get a clip on the timeline
+  // we click basic, then can re-style via the right-side panel after.
+  await page.locator('[class*="AddTextPanel__addTextBasicButton"]').first().click({ timeout: 5000 });
+  console.log('[overlay] text style: basic');
 
   // Text input / contenteditable should now be focused
   const input = page.locator(s.textInput).first();

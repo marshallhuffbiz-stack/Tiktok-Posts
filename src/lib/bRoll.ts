@@ -17,6 +17,7 @@ import { findHdVariant, downloadBytes, parsePexelsUrl } from './pexelsVariant.js
 import { diversifyHashtags, rewriteCaptionOpener } from './contentVariety.js';
 import { pickTopic, pickAudienceControversy } from './brollVariety.js';
 import { addVoiceover } from './voiceover.js';
+import { generateLocalHook } from './localHook.js';
 import type { BRollResult, BRollSettings } from './types.js';
 
 const BROLL_API = 'https://rent-roll-slides.vercel.app/api/broll';
@@ -237,12 +238,14 @@ export async function generateBRoll(
   const overrides = { topic: chosenTopic, audience: chosenAudience, controversy: chosenControversy };
   console.log(`[bRoll] inputs: topic="${chosenTopic}" audience=${chosenAudience} controversy=${chosenControversy}`);
 
+  // For aspect-ratio retries we keep looping. For hook content, we accept
+  // a null hook from the API and fall back to a local generator further
+  // down — the API's AI call has been intermittently failing.
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let resp: BRollResponse;
     try {
       resp = await callApi(settings, recentHooks, overrides);
     } catch (err) {
-      // Transient HTTP errors (500, 502, 503, fetch failures) — retry silently
       if (err instanceof BRollApiError && attempt < maxAttempts) {
         console.log(`[bRoll] attempt ${attempt} API error, retrying: ${err.message}`);
         continue;
@@ -252,19 +255,24 @@ export async function generateBRoll(
     lastResp = resp;
     const aspect = parseAspectRatio(resp.processing);
     lastAspect = aspect;
-    const hookOk = !settings.generateText || !!resp.hook;
     const aspectOk = is916(aspect);
-    if (hookOk && aspectOk) break;
-    // otherwise continue — we'll discard this clip and try again
+    // We only retry for aspect — hook can be null and we'll fall back later.
+    if (aspectOk) break;
   }
 
-  if (!lastResp) throw new BRollApiError('no response after retries'); // defensive
-
-  if (settings.generateText && !lastResp.hook) {
-    throw new OverlayGenerationFailed(maxAttempts);
-  }
+  if (!lastResp) throw new BRollApiError('no response after retries');
   if (!is916(lastAspect)) {
     throw new NoPortraitClipFound(maxAttempts, lastAspect);
+  }
+
+  // If API didn't return a hook but generateText is on, fall back to local
+  // template-based generator. Logged distinctly so we can see how often
+  // the API is failing.
+  if (settings.generateText && !lastResp.hook) {
+    console.log('[bRoll] API hook was null — falling back to local template generator');
+    lastResp.hook = generateLocalHook(
+      chosenTopic, chosenAudience, chosenControversy, recentHooks,
+    );
   }
 
   const slug = lastResp.sourceCategory || 'broll';
