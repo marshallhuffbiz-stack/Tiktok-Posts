@@ -10,6 +10,11 @@ export interface BRollSettings {
   controversy: 1 | 2 | 3 | 4 | 5;
   pullTrending: boolean;
   overlayRetries: number;
+  /** When true, skip calling the API for hook content and use the local
+   *  template generator directly. The API is still called to fetch the
+   *  Pexels clip itself. Set true when the API's AI is broken or when
+   *  we've observed local templates outperform API templates. */
+  preferLocalHooks?: boolean;
   /** Optional: add a TTS voice-over track to the silent Pexels clip. */
   voiceover?: {
     enabled?: boolean;

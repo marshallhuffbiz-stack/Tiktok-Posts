@@ -93,7 +93,9 @@ async function callApi(
     audience: overrides.audience ?? audienceToApi(settings.audience),
     controversyLevel: overrides.controversy ?? settings.controversy,
     useTrends: settings.pullTrending,
-    generateHook: settings.generateText,
+    // Skip the API's (broken) AI hook generation when we prefer local.
+    // We still call the API for the clip itself; just don't ask for a hook.
+    generateHook: settings.generateText && !settings.preferLocalHooks,
     cropTo916: settings.cropServerSide,
     recentHooks,
   };
@@ -265,14 +267,20 @@ export async function generateBRoll(
     throw new NoPortraitClipFound(maxAttempts, lastAspect);
   }
 
-  // If API didn't return a hook but generateText is on, fall back to local
-  // template-based generator. Logged distinctly so we can see how often
-  // the API is failing.
-  if (settings.generateText && !lastResp.hook) {
-    console.log('[bRoll] API hook was null — falling back to local template generator');
-    lastResp.hook = generateLocalHook(
-      chosenTopic, chosenAudience, chosenControversy, recentHooks,
-    );
+  // Decide hook source:
+  //  - preferLocalHooks=true → always use local (API's AI has been broken)
+  //  - preferLocalHooks=false + API returned a hook → use API hook
+  //  - preferLocalHooks=false + API returned null → fall back to local
+  // 312-view data point came from a local hook, 0-view data points came
+  // from API hooks. Until we have counter-evidence, preferLocalHooks=true.
+  if (settings.generateText) {
+    if (settings.preferLocalHooks || !lastResp.hook) {
+      const reason = settings.preferLocalHooks ? 'preferLocalHooks=true' : 'API hook was null';
+      console.log(`[bRoll] using local template generator (${reason})`);
+      lastResp.hook = generateLocalHook(
+        chosenTopic, chosenAudience, chosenControversy, recentHooks,
+      );
+    }
   }
 
   const slug = lastResp.sourceCategory || 'broll';

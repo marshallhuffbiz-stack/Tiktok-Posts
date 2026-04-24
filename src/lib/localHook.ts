@@ -315,6 +315,109 @@ const TEMPLATES: Template[] = [
       };
     },
   },
+
+  // ---------- POV narrative (story form) ----------
+  {
+    id: 'LOCAL-POV-001',
+    generate: ({ rng, audience, controversy }) => {
+      const buy = range(rng, 82, 148, 2) * 1000;
+      const rentEach = range(rng, 1250, 1650, 50);
+      const monthsToBreakeven = range(rng, 5, 11);
+      return {
+        overlay_lines: [
+          `POV: your first rental just closed`,
+          `You paid ${dollars(buy)} for a duplex`,
+          `Both sides rent for ${dollars(rentEach)}`,
+          `Your broke college self would cry`,
+          `Break-even in ${monthsToBreakeven} months`,
+        ],
+        closer_line: `I tracked every step in Rent Roll.`,
+        caption: `The first property felt impossible until the keys were in my hand. Now it pays me while I sleep. Save this for the day you finally stop waiting for the perfect deal and just buy the good one.`,
+        hashtags: ['#realestateinvesting', '#firsthome', '#househacking', '#wealthbuilding', '#landlord'],
+        template_id: 'LOCAL-POV-001',
+        controversy_level: controversy,
+        audience,
+        rationale: null,
+      };
+    },
+  },
+
+  // ---------- Contrarian opinion ("I say the opposite") ----------
+  {
+    id: 'LOCAL-CONTRA-001',
+    generate: ({ rng, audience, controversy }) => {
+      const ugly = range(rng, 55, 95, 5) * 1000;
+      const rehab = range(rng, 18, 42) * 1000;
+      const arv = Math.round((ugly + rehab) * (1.4 + rng() * 0.3));
+      return {
+        overlay_lines: [
+          `Everyone says buy move-in ready`,
+          `I say buy the ugly one`,
+          `Ugly duplex costs ${dollars(ugly)}`,
+          `Rehab budget is ${dollars(rehab)}`,
+          `Appraised value: ${dollars(arv)}`,
+        ],
+        closer_line: `Ugly is the shortcut. I track it in Rent Roll.`,
+        caption: `Nobody wants the carpet-smells-weird house. That is exactly why the numbers work. Forced equity beats waiting for appreciation every time. Save this if you keep losing to cash buyers on Zillow.`,
+        hashtags: ['#realestateinvesting', '#fixandflip', '#BRRRR', '#realestatetips', '#cashflow'],
+        template_id: 'LOCAL-CONTRA-001',
+        controversy_level: controversy,
+        audience,
+        rationale: null,
+      };
+    },
+  },
+
+  // ---------- Reveal ("Nobody tells you this") ----------
+  {
+    id: 'LOCAL-REVEAL-001',
+    generate: ({ rng, audience, controversy }) => {
+      const savings = range(rng, 2400, 7800, 100);
+      const timeSaved = range(rng, 9, 23);
+      return {
+        overlay_lines: [
+          `Nobody tells new landlords this`,
+          `You can screen before you meet`,
+          `Paystubs, credit, eviction check`,
+          `Saves ${dollars(savings)} a year minimum`,
+          `And ${timeSaved} hours of awkward showings`,
+        ],
+        closer_line: `I pre-filter in Rent Roll.`,
+        caption: `The hack that saved my sanity year one. Screen on paper before you ever unlock a door. Bad applicants self-select out when the upfront bar is clear. Save this before your next vacancy.`,
+        hashtags: ['#landlord', '#landlordtips', '#tenantscreening', '#rentalproperty', '#propertymanagement'],
+        template_id: 'LOCAL-REVEAL-001',
+        controversy_level: controversy,
+        audience,
+        rationale: null,
+      };
+    },
+  },
+
+  // ---------- Comeback story ("I lost, here's what I learned") ----------
+  {
+    id: 'LOCAL-COMEBACK-001',
+    generate: ({ rng, audience, controversy }) => {
+      const lostAmount = range(rng, 4200, 12400, 100);
+      const month = range(rng, 3, 11);
+      const rebuildMonths = range(rng, 6, 14);
+      return {
+        overlay_lines: [
+          `My first rental lost ${dollars(lostAmount)}`,
+          `Wrong tenant, month ${month} of year one`,
+          `Rebuilt the screening from scratch`,
+          `Stopped losing money in ${rebuildMonths} months`,
+          `Same house, different system`,
+        ],
+        closer_line: `The system lives in Rent Roll now.`,
+        caption: `The first deal can burn you. What matters is the lesson you pull out. A better filter, a better lease, a better system. The property did not change. I did. Save this if you think your first loss means you are done.`,
+        hashtags: ['#landlord', '#realestate', '#rentalproperty', '#landlordlife', '#wealthbuilding'],
+        template_id: 'LOCAL-COMEBACK-001',
+        controversy_level: controversy,
+        audience,
+        rationale: null,
+      };
+    },
+  },
 ];
 
 /**
