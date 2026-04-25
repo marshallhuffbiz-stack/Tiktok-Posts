@@ -13,3 +13,4 @@ config/topics.txt
 *.jpeg
 *.jpg
 *.png
+browser-data
